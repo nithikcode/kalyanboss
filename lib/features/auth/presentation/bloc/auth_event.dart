@@ -1,0 +1,36 @@
+part of 'auth_bloc.dart';
+
+abstract class AuthEvent {}
+
+class LoginEvent extends AuthEvent {
+  final String mobile;
+  final String password;
+
+  LoginEvent({required this.mobile, required this.password});
+}
+
+class RegisterEvent extends AuthEvent {
+  final String mobile;
+  final String password;
+  final String name;
+
+  RegisterEvent({required this.name, required this.mobile, required this.password});
+}
+
+class SendOtpEvent extends AuthEvent {
+  final String mobile;
+
+  SendOtpEvent({required this.mobile});
+}
+class VerifyEvent extends AuthEvent {
+  final String mobile;
+  final String otp;
+
+  VerifyEvent({required this.mobile, required this.otp});
+}
+
+class LogoutEvent extends AuthEvent {}
+
+class ResetLoginStateEvent extends AuthEvent {}
+
+class CheckAuthStatusEvent extends AuthEvent {}
