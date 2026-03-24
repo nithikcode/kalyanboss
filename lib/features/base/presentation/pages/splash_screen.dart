@@ -2,7 +2,11 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kalyanboss/config/routes/route_names.dart';
+import 'package:kalyanboss/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:kalyanboss/services/session_manager.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -20,6 +24,7 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  final SessionManager sessionManager = SessionManager.instance;
 
   @override
   void initState() {
@@ -57,11 +62,26 @@ class _SplashScreenState extends State<SplashScreen>
 
     _arcController.forward().then((_) => _textController.forward());
 
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) context.go('/login');
-    });
+    _navigateToNext();
   }
+  void _navigateToNext() async {
+    // Wait for the splash animation to finish (e.g., 3 seconds)
+    await Future.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
 
+    // Trigger the AuthBloc to check the current session status
+    // This will update the AuthState, which GoRouter is listening to.
+    context.read<AuthBloc>().add(CheckAuthStatusEvent());
+
+    // If for some reason GoRouter doesn't redirect automatically (e.g. initial state was already correct),
+    // we do a manual fallback check:
+    final state = context.read<AuthBloc>().state;
+    if (state.isAuthenticated) {
+      context.go(RouteNames.home);
+    } else {
+      context.go(RouteNames.register);
+    }
+  }
   @override
   void dispose() {
     _arcController.dispose();

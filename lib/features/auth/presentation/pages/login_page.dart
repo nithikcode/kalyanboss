@@ -1,31 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:kalyanboss/config/constants.dart';
-import 'package:kalyanboss/config/routes/route_names.dart';
 import 'package:kalyanboss/config/theme/theme.dart';
-import 'package:kalyanboss/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kalyanboss/utils/enums/enums.dart';
 import 'package:kalyanboss/utils/widgets/custom_button_widget.dart';
 import 'package:kalyanboss/utils/widgets/text_field_component.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:kalyanboss/features/auth/presentation/bloc/auth_bloc.dart';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:responsive_framework/responsive_framework.dart';
+import 'package:kalyanboss/config/routes/route_names.dart';
+import 'package:kalyanboss/features/auth/presentation/bloc/auth_bloc.dart';
 
 
-
-class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderStateMixin {
-  final _nameController = TextEditingController();
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _mobileController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-
-  // Added a GlobalKey for the confirm field to trigger remote validation
   final _formKey = GlobalKey<FormState>();
 
   late AnimationController _iconController;
@@ -36,7 +36,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     super.initState();
     _iconController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000), // Slowed down for better bounce
+      duration: const Duration(milliseconds: 1000),
     );
 
     _iconScale = CurvedAnimation(
@@ -44,7 +44,6 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
       curve: Curves.elasticOut,
     );
 
-    // Using addPostFrameCallback is cleaner than Future.delayed for init animations
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(const Duration(milliseconds: 200), () {
         if (mounted) _iconController.forward();
@@ -54,10 +53,8 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
 
   @override
   void dispose() {
-    _nameController.dispose();
     _mobileController.dispose();
     _passwordController.dispose();
-    _confirmPasswordController.dispose();
     _iconController.dispose();
     super.dispose();
   }
@@ -69,11 +66,11 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      // Ensures the screen pushes up when keyboard appears
       resizeToAvoidBottomInset: true,
       // appBar: AppBar(
       //   backgroundColor: Colors.transparent,
       //   elevation: 0,
+      //   // Optional: Add back button if coming from specific flow
       //   leading: BackButton(color: colorScheme.onSurface),
       // ),
       body: SafeArea(
@@ -81,38 +78,27 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
           child: MaxWidthBox(
             maxWidth: 600,
             child: SingleChildScrollView(
-              // Physics added for better "Gaming App" feel on bounce
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: BlocConsumer<AuthBloc, AuthState>(
-                listenWhen: (previous, current) =>
-                previous.signupEntity != current.signupEntity, // Only listen to signup changes
                 listener: (context, state) {
-                  state.signupEntity.whenOrNull(
-                    success: (data) {
-                      // Registration was successful, and BLoC has already fired SendOtpEvent
-                      // We now move to the verification screen
-                      context.pushNamed(RouteNames.verifyOtp);
-                    },
-                    error: (message, errorCode) {
-                      // The 409 Conflict error we fixed earlier will be caught here
-
-                    },
-                  );
+                  // Navigation handled by GoRouter redirect logic
                 },
                 builder: (context, state) {
-                  final isLoading = state.userEntity?.maybeWhen(
+                  // Using verifyOtpState as per your current AuthBloc login logic
+                  final isLoading = state.verifyOtpState.maybeWhen(
                     loading: () => true,
                     orElse: () => false,
-                  ) ?? false;
+                  );
 
                   return Form(
                     key: _formKey,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const SizedBox(height: 10),
-                        // --- Animated App Icon Section ---
+                        const SizedBox(height: 20),
+
+                        // --- Animated App Icon (Matching Register) ---
                         ScaleTransition(
                           scale: _iconScale,
                           child: Container(
@@ -135,7 +121,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                             child: ClipOval(
                               child: Image.asset(
                                 AppLogos.appIcon,
-                                height: 80, // Slightly smaller for better fit
+                                height: 80,
                                 width: 80,
                                 fit: BoxFit.cover,
                               ),
@@ -145,29 +131,19 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                         const SizedBox(height: 24),
 
                         Text(
-                          "Let's Register Your Account!",
+                          "Welcome Back!",
                           style: AppTextStyles.h1(color: colorScheme.onSurface),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "Create an account to start your journey.",
+                          "Please login to access your account.",
                           style: AppTextStyles.bodyMedium(color: colorScheme.onSurfaceVariant),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 32),
 
                         // --- Input Fields ---
-                        CustomTextField(
-                          controller: _nameController,
-                          leading: Icon(Icons.person_outline, color: colorScheme.primary),
-                          hint: "Your Gamer Name",
-                          label: "Name",
-                          validationType: ValidationType.required,
-                          textInputAction: TextInputAction.next,
-                        ),
-                        const SizedBox(height: 16),
-
                         CustomTextField(
                           controller: _mobileController,
                           leading: Icon(Icons.phone_android_outlined, color: colorScheme.primary),
@@ -183,62 +159,51 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                           controller: _passwordController,
                           obscureText: true,
                           leading: Icon(Icons.lock_outline, color: colorScheme.primary),
-                          hint: "Choose a Password",
+                          hint: "Enter Password",
                           label: "Password",
-                          validationType: ValidationType.minLength,
-                          minLength: 6,
-                          textInputAction: TextInputAction.next,
-                          // Important: re-validate confirm password when this changes
-                          onChanged: (_) {
-                            if (_confirmPasswordController.text.isNotEmpty) {
-                              _formKey.currentState?.validate();
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 16),
-
-                        CustomTextField(
-                          controller: _confirmPasswordController,
-                          obscureText: true,
-                          leading: Icon(Icons.lock_reset_outlined, color: colorScheme.primary),
-                          hint: "Confirm Password",
-                          label: "Confirm Password",
-                          validationType: ValidationType.custom, // Fixed: Added missing type
-                          customValidator: (val) {
-                            if (val == null || val.isEmpty) return "Please confirm password";
-                            if (val != _passwordController.text) return "Passwords don't match";
-                            return null;
-                          },
+                          validationType: ValidationType.required,
                           textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _handleRegister(context: context, mobile : _mobileController, password : _passwordController, name : _nameController),
+                          onSubmitted: (_) => _handleLogin(),
                         ),
 
-                        const SizedBox(height: 32),
-
-                        // --- Action Button ---
-                        CustomButton(
-                          isLoading: isLoading,
-                          onPressed: () {
-                            _handleRegister(context: context, mobile : _mobileController, password : _passwordController, name : _nameController);
-                          },
-                          child: const Text('Sign Up'),
+                        // Forgot Password Link
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () {
+                              // Handle forgot password
+                            },
+                            child: Text(
+                              "Forgot Password?",
+                              style: AppTextStyles.bodyMedium(color: colorScheme.primary),
+                            ),
+                          ),
                         ),
 
                         const SizedBox(height: 24),
 
-                        // Footer
+                        // --- Action Button ---
+                        CustomButton(
+                          isLoading: isLoading,
+                          onPressed: _handleLogin,
+                          child: const Text('Login'),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Footer (Link to Register)
                         Wrap(
                           alignment: WrapAlignment.center,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
-                              "Existing Account? ",
+                              "Don't have an account? ",
                               style: AppTextStyles.bodyMedium(color: colorScheme.onSurfaceVariant),
                             ),
                             TextButton(
-                              onPressed: () => context.go(RouteNames.loginScreen),
+                              onPressed: () => context.go(RouteNames.register),
                               child: Text(
-                                "Login here",
+                                "Sign Up here",
                                 style: AppTextStyles.bodyMediumBold(color: colorScheme.primary),
                               ),
                             ),
@@ -257,13 +222,12 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     );
   }
 
-  void _handleRegister({required BuildContext context, required TextEditingController mobile, required TextEditingController password, required TextEditingController name}) {
+  void _handleLogin() {
     if (_formKey.currentState!.validate()) {
-        context.read<AuthBloc>().add(RegisterEvent(
-          mobile: mobile.text.trim(),
-          password: password.text.trim(),
-          name : name.text.trim()
-        ));
+      context.read<AuthBloc>().add(LoginEvent(
+        mobile: _mobileController.text.trim(),
+        password: _passwordController.text.trim(),
+      ));
     }
   }
 }

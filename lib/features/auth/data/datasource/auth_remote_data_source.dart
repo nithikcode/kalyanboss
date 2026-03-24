@@ -1,12 +1,14 @@
 
 import 'package:dartz/dartz.dart';
+import 'package:kalyanboss/features/auth/data/model/user_model.dart';
+import 'package:kalyanboss/features/auth/data/model/verify_otp_response.dart';
+import 'package:kalyanboss/utils/api/api_error.dart';
+import 'package:kalyanboss/utils/api/api_result.dart';
 
-import '../../../../utils/api/api_error.dart';
-import '../../../../utils/api/api_result.dart';
+
 import '../../../../utils/network/network_api_service.dart';
 import '../../../base/data/datasource/base_remote_data_source.dart';
 import '../model/signup_response.dart';
-import '../model/user_model.dart';
 
 class AuthRemoteDataSource extends BaseRemoteDataSource {
   final NetworkServicesApi _api;
@@ -15,15 +17,15 @@ class AuthRemoteDataSource extends BaseRemoteDataSource {
       : _api = api ?? NetworkServicesApi();
 
   /// Login -
-  Future<Either<Result<UserModel>, ApiError>> login(
+  Future<Either<Result<VerifyOtpResponseModel>, ApiError>> login(
       Map<String, dynamic> data,
       ) async {
-    return execute<UserModel>(
-      apiCall: () => _api.postApi('/auth/login', data),
+    return execute<VerifyOtpResponseModel>(
+      apiCall: () => _api.postApi('/auth/loginpass', data),
       onSuccess: (response) {
-        // Response is already decoded by Dio
-        final message = response['message'] ?? 'OTP sent successfully';
-        return message;
+        // Parse user from response
+        final data = VerifyOtpResponseModel.fromJson(response);
+        return data;
       },
       operationName: 'Login',
     );
@@ -36,7 +38,7 @@ class AuthRemoteDataSource extends BaseRemoteDataSource {
       apiCall: () => _api.postApi('/auth/signup', data),
       onSuccess: (response) {
         // Response is already decoded by Dio
-        final message = response['message'] ?? 'Registration Successful';
+        final message = SignupResponse.fromJson(response);
         return message;
       },
       operationName: 'Signup',
@@ -58,17 +60,33 @@ class AuthRemoteDataSource extends BaseRemoteDataSource {
   }
 
   /// Verify - Verifies OTP and returns user data
-  Future<Either<Result<UserModel>, ApiError>> verify(
+  Future<Either<Result<VerifyOtpResponseModel>, ApiError>> verify(
       Map<String, dynamic> data,
       ) async {
-    return execute<UserModel>(
+    return execute<VerifyOtpResponseModel>(
       apiCall: () => _api.postApi('/auth/verify', data),
       onSuccess: (response) {
         // Parse user from response
-        final userData = response['data'];
-        return UserModel.fromJson(userData);
+        final data = VerifyOtpResponseModel.fromJson(response);
+        return data;
       },
-      operationName: 'Verify',
+      operationName: 'VerifyOtp',
     );
   }
+
+
+  /// Fetch Profile - Fetches user data
+  Future<Either<Result<UserModel>, ApiError>> fetchProfile(Map<String, dynamic> data,) async {
+    return execute<UserModel>(
+      apiCall: () => _api.getApi('/app/users/get/${data['id']}'),
+      onSuccess: (response) {
+        // Parse user from response
+        final data = UserModel.fromJson(response['data']);
+        return data;
+      },
+      operationName: 'fetchProfile',
+    );
+  }
+
+
 }

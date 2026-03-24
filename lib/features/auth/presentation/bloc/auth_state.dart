@@ -7,22 +7,25 @@ class AuthState {
   final bool isAuthenticated;
   final ApiState<SignupEntity> signupEntity;
   final ApiState<String> otpState;
+  final ApiState<VerifyOtpEntity> verifyOtpState;
 
-  AuthState({required this.userEntity, this.loginRequested = false, this.isAuthenticated = false, required this.signupEntity, required this.otpState});
+  AuthState({required this.userEntity, this.loginRequested = false, this.isAuthenticated = false, required this.signupEntity, required this.otpState, required this.verifyOtpState});
 
   AuthState copyWith({
     ApiState<UserEntity>? userEntity,
     bool? loginRequested = false,
     bool? isAuthenticated = false,
     ApiState<SignupEntity>? signupEntity,
-    ApiState<String>? otpState
+    ApiState<String>? otpState,
+    ApiState<VerifyOtpEntity>? verifyOtpState
   }){
     return AuthState(
         userEntity: userEntity ?? this.userEntity,
         loginRequested: loginRequested ?? this.loginRequested,
         isAuthenticated: isAuthenticated ?? this.isAuthenticated,
         signupEntity: signupEntity ?? this.signupEntity,
-      otpState: otpState ?? this.otpState
+      otpState: otpState ?? this.otpState,
+      verifyOtpState: verifyOtpState ?? this.verifyOtpState,
     );
   }
 }

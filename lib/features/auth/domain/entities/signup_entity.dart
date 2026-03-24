@@ -1,23 +1,28 @@
-import '../../data/model/signup_response.dart';
 
-class SignupEntity {
-  final String id;
+import 'package:equatable/equatable.dart';
+class SignupEntity extends Equatable {
+  final String? message;
+  final SignupDataEntity? data;
+
+  const SignupEntity({
+    this.message,
+    this.data,
+  });
+
+  @override
+  List<Object?> get props => [message, data];
+}
+
+class SignupDataEntity extends Equatable {
+  final String? id;
   final String? mobile;
-  final String message;
 
-  SignupEntity({
-    required this.id,
-    required this.message,
+  const SignupDataEntity({
+    this.id,
     this.mobile,
   });
+
+  @override
+  List<Object?> get props => [id, mobile];
 }
 
-extension SignupModelX on SignupResponse {
-  SignupEntity toEntity() {
-    return SignupEntity(
-      id: data?.id ?? '',
-      mobile: data?.mobile,
-      message: message ?? 'Success',
-    );
-  }
-}

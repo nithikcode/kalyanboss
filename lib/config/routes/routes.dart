@@ -2,8 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kalyanboss/config/routes/route_names.dart';
+import 'package:kalyanboss/features/auth/presentation/pages/login_page.dart';
+import 'package:kalyanboss/features/auth/presentation/pages/verify_otp_screen.dart';
+import 'package:kalyanboss/features/base/presentation/pages/base_screen.dart';
+import 'package:kalyanboss/features/game/presentation/screens/game_screen.dart';
 
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
@@ -12,84 +16,99 @@ import '../../utils/di/service_locator.dart';
 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
 class AppRouter {
   static GoRouter get router => _router;
 
+  // Helper method to wrap routes with a consistent transition
+  static Page<dynamic> _withTransition(GoRouterState state, Widget child) {
+    return CustomTransitionPage(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 400),
+      reverseTransitionDuration: const Duration(milliseconds: 300),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.95, end: 1.0).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   static final GoRouter _router = GoRouter(
     navigatorKey: navigatorKey,
-    initialLocation: '/splash',
+    initialLocation: RouteNames.splash,
     debugLogDiagnostics: kDebugMode,
     refreshListenable: GoRouterRefreshStream(sl<AuthBloc>().stream),
     routes: [
       GoRoute(
-          path: '/login',
-        name: 'login',
-        builder: (context, state) => const RegisterPage(),
-      ),
-
-      GoRoute(
-        path: '/',
-        redirect: (_, __) => '/splash',
+        path: RouteNames.splash,
+        name: RouteNames.splash,
+        pageBuilder: (context, state) => _withTransition(state, const SplashScreen()),
       ),
       GoRoute(
-        path: '/splash',
-        builder: (context, state) => const SplashScreen(),
+        path: RouteNames.register,
+        name: RouteNames.register,
+        pageBuilder: (context, state) => _withTransition(state, const RegisterPage()),
       ),
-      // ...UserRouter.routes,
-      // ...AdminRouter.routes,
+      GoRoute(
+        path: RouteNames.loginScreen,
+        name: RouteNames.loginScreen,
+        pageBuilder: (context, state) => _withTransition(state, const LoginScreen()),
+      ),
+      GoRoute(
+        path: RouteNames.verifyOtp,
+        name: RouteNames.verifyOtp,
+        pageBuilder: (context, state) => _withTransition(state, const VerifyOtpScreen()),
+      ),
+      GoRoute(
+        path: RouteNames.gameScreen,
+        name: RouteNames.gameScreen,
+        pageBuilder: (context, state) => _withTransition(state, const GameScreen()),
+      ),
+      GoRoute(
+        path: RouteNames.home,
+        name: RouteNames.home,
+        pageBuilder: (context, state) => _withTransition(state, const BaseScreen()),
+      ),
     ],
     redirect: _authRedirect,
   );
 
-
   static String? _authRedirect(BuildContext context, GoRouterState state) {
-    final authBloc = context.read<AuthBloc>();
-    final authState = authBloc.state;
-
+    final authState = sl<AuthBloc>().state;
     final currentLocation = state.matchedLocation;
-    final isGoingToAdminLogin = currentLocation == '/admin-login';
-    final isGoingToSplash = currentLocation == '/splash';
-    final isGoingToAdmin = currentLocation.startsWith('/admin');
 
-    final user = authState.userEntity?.whenOrNull(success: (data) => data);
-    final isAuthenticated = authState.isAuthenticated;
-    final isAdminOrSuperAdmin = user?.role?.toLowerCase() == 'admin' || user?.role?.toLowerCase() == 'superadmin';
+    final bool isAuthenticated = authState.isAuthenticated;
 
-    // Allow splash screen always
-    if (isGoingToSplash) return null;
+    // Define what pages are considered "Auth" pages
+    final bool isAuthPage = currentLocation == RouteNames.splash ||
+        currentLocation == RouteNames.register ||
+        currentLocation == RouteNames.loginScreen ||
+        currentLocation == RouteNames.verifyOtp;
 
-
-    // ==================== A. ALREADY AUTHENTICATED REDIRECT ====================
-    // If user is already authenticated and is trying to visit /admin-login, redirect them.
-    if (isGoingToAdminLogin && isAuthenticated) {
-      if (isAdminOrSuperAdmin) {
-        return '/admin/dashboard';
-      } else {
-        return '/home';
-      }
+    // 1. If the user is authenticated and is currently on an Auth page (like Splash or VerifyOtp)
+    // redirect them to the Game Screen (or Home)
+    if (isAuthenticated && isAuthPage) {
+      return RouteNames.home; // Or RouteNames.home based on your preference
     }
 
+    // 2. If the user is NOT authenticated and tries to access protected pages
+    // You can add logic here to force them to Register if they try to access /home directly
+    final bool isProtectedRoute = currentLocation == RouteNames.home || currentLocation == RouteNames.gameScreen;
+    if (!isAuthenticated && isProtectedRoute) return RouteNames.register;
 
-    // ==================== B. ADMIN ROUTE PROTECTION ====================
-    // if (isGoingToAdmin && !isGoingToAdminLogin) {
-    //   if (!isAuthenticated || !isAdminOrSuperAdmin) {
-    //     // Not logged in OR not an Admin, redirect to admin login
-    //     return '/admin-login';
-    //   }
-    //   // Logged in as Admin, allow access
-    //   return null;
-    // }
-
-    // Allow all other routes (like /home for users)
     return null;
-  }
-}
+  }}
 
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<dynamic> stream) {
-    notifyListeners();
-    _subscription = stream.asBroadcastStream().listen(
+    _subscription = stream.listen(
           (dynamic _) => notifyListeners(),
     );
   }

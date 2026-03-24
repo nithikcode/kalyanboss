@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:kalyanboss/config/constants.dart';
 import 'package:kalyanboss/utils/di/service_locator.dart' as di;
 import 'package:responsive_framework/responsive_framework.dart';
 import 'config/routes/routes.dart';
@@ -35,7 +36,7 @@ class MyApp extends StatelessWidget {
       child: BlocBuilder<ThemeBloc, ThemeState>(
         builder: (context, state) {
           return MaterialApp.router(
-            title: 'Ecomm App',
+            title: AppStrings.appName,
             debugShowCheckedModeBanner: false,
 
             // Link to your external theme file

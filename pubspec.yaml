@@ -40,7 +40,7 @@ dependencies:
   responsive_framework: ^1.5.1
   dio: ^5.9.0
   shared_preferences: ^2.5.4
-  sms_autofill: ^2.4.1 # login
+  pinput: ^5.0.0
   get_it: ^8.2.0 # DI
   socket_io_client: ^3.1.2 # not using currently
   flutter_secure_storage: ^9.2.4 # local storage

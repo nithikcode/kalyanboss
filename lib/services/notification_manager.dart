@@ -59,43 +59,43 @@ class NotificationService {
       // Clear badges when notification is tapped from terminated state
       await clearAllBadges();
 
-      if (response?.payload != null) {
-        try {
-          final Map<String, dynamic> payloadData =
-          json.decode(response!.payload!);
-
-          if (response.actionId == 'track') {
-            final orderId = payloadData['orderId'];
-            final mobile = payloadData['mobile'];
-
-            Future.delayed(const Duration(milliseconds: 500), () {
-              navigatorKey.currentState?.pushNamed(
-                RouteNames.orderInfoScreen,
-                arguments: {
-                  'orderId': orderId,
-                  'phone': mobile,
-                },
-              );
-            });
-          } else if (response.actionId == 'support') {
-            Future.delayed(const Duration(milliseconds: 500), () {
-              navigatorKey.currentState?.pushNamed(RouteNames.support);
-            });
-          } else if (payloadData['type'] == 'order_details') {
-            Future.delayed(const Duration(milliseconds: 500), () {
-              navigatorKey.currentState?.pushNamed(
-                RouteNames.orderInfoScreen,
-                arguments: {
-                  'orderId': payloadData['orderId'],
-                  'phone': payloadData['phone'],
-                },
-              );
-            });
-          }
-        } catch (e) {
-          createLog('Error handling launch payload: $e');
-        }
-      }
+      // if (response?.payload != null) {
+      //   try {
+      //     final Map<String, dynamic> payloadData =
+      //     json.decode(response!.payload!);
+      //
+      //     if (response.actionId == 'track') {
+      //       final orderId = payloadData['orderId'];
+      //       final mobile = payloadData['mobile'];
+      //
+      //       Future.delayed(const Duration(milliseconds: 500), () {
+      //         navigatorKey.currentState?.pushNamed(
+      //           RouteNames.orderInfoScreen,
+      //           arguments: {
+      //             'orderId': orderId,
+      //             'phone': mobile,
+      //           },
+      //         );
+      //       });
+      //     } else if (response.actionId == 'support') {
+      //       Future.delayed(const Duration(milliseconds: 500), () {
+      //         navigatorKey.currentState?.pushNamed(RouteNames.support);
+      //       });
+      //     } else if (payloadData['type'] == 'order_details') {
+      //       Future.delayed(const Duration(milliseconds: 500), () {
+      //         navigatorKey.currentState?.pushNamed(
+      //           RouteNames.orderInfoScreen,
+      //           arguments: {
+      //             'orderId': payloadData['orderId'],
+      //             'phone': payloadData['phone'],
+      //           },
+      //         );
+      //       });
+      //     }
+      //   } catch (e) {
+      //     createLog('Error handling launch payload: $e');
+      //   }
+      // }
     }
 
     // Clear badges when notification is tapped from background
@@ -297,29 +297,29 @@ class NotificationService {
           final mobile = data['mobile'];
           final type = data['type'];
 
-          if(type == "order_details"){
-            navigatorKey.currentState?.pushNamed(
-              RouteNames.orderInfoScreen,
-              arguments: {
-                "orderId": orderId,
-                "phone": mobile,
-              },
-            );
-          }
-
-          if (response.actionId == 'track') {
-            navigatorKey.currentState?.pushNamed(
-              RouteNames.orderInfoScreen,
-              arguments: {
-                "orderId": orderId,
-                "phone": mobile,
-              },
-            );
-          }
-
-          if (response.actionId == 'support') {
-            navigatorKey.currentState?.pushNamed(RouteNames.support);
-          }
+          // if(type == "order_details"){
+          //   navigatorKey.currentState?.pushNamed(
+          //     RouteNames.orderInfoScreen,
+          //     arguments: {
+          //       "orderId": orderId,
+          //       "phone": mobile,
+          //     },
+          //   );
+          // }
+          //
+          // if (response.actionId == 'track') {
+          //   navigatorKey.currentState?.pushNamed(
+          //     RouteNames.orderInfoScreen,
+          //     arguments: {
+          //       "orderId": orderId,
+          //       "phone": mobile,
+          //     },
+          //   );
+          // }
+          //
+          // if (response.actionId == 'support') {
+          //   navigatorKey.currentState?.pushNamed(RouteNames.support);
+          // }
         }
       },
     );

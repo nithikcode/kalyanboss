@@ -31,6 +31,7 @@ class AppStrings {
   static String defaultWhatsAppMessage = "Hi, I would like to discuss about the furniture and other details. Kindly assist!";
   static String url = 'https://woodenstreet.com';
   static String showDeleteAccountButton = 'false';
+  static String appName = 'KalyanBoss';
 
 
   // --- Other constants ---

@@ -1,5 +1,5 @@
-import 'dart:convert';
 import '../../../../utils/helpers/customJsonParser.dart';
+import 'package:kalyanboss/features/auth/domain/entities/signup_entity.dart';
 
 class SignupResponse {
   final String? message;
@@ -10,8 +10,18 @@ class SignupResponse {
     this.data,
   });
 
-  factory SignupResponse.fromRawJson(String str) =>
-      SignupResponse.fromJson(json.decode(str));
+  // ✅ toEntity lives here — no extension, no circular import
+  SignupEntity toEntity() {
+    return SignupEntity(
+      message: message,
+      data: data != null
+          ? SignupDataEntity(
+        id: data?.id,
+        mobile: data?.mobile,
+      )
+          : null,
+    );
+  }
 
   factory SignupResponse.fromJson(Map<String, dynamic> json) {
     return SignupResponse(

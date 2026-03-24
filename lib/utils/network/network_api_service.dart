@@ -230,9 +230,8 @@ class NetworkServicesApi implements BaseApiServices {
     if (response.statusCode! >= 200 && response.statusCode! < 300) {
       return response.data;
     } else {
-      throw FetchDataException(
-        'Error occurred with status code: ${response.statusCode}',
-      );
+      // CHANGE THIS: Use your status code handler for consistency
+      throw _handleStatusCode(response);
     }
   }
 
@@ -286,6 +285,8 @@ class NetworkServicesApi implements BaseApiServices {
         return ForbiddenException(message ?? 'Forbidden');
       case 404:
         return NotFoundException(message ?? 'Resource not found');
+      case 409: // <--- ADD THIS CASE
+        return ConflictException(message);
       case 500:
       case 502:
       case 503:
@@ -486,7 +487,6 @@ class _ErrorInterceptor extends Interceptor {
 }
 
 
-// lib/core/exceptions/app_exceptions.dart
 
 /// Base exception class for all app exceptions
 class AppException implements Exception {
@@ -543,7 +543,15 @@ class UnauthorizedException extends AppException {
     statusCode: 401,
   );
 }
-
+/// Exception for conflict errors (409) - e.g., User already exists
+class ConflictException extends AppException {
+  ConflictException([String? message])
+      : super(
+    message: message ?? 'Conflict occurred',
+    prefix: 'Conflict',
+    statusCode: 409,
+  );
+}
 /// Exception for forbidden access (403)
 class ForbiddenException extends AppException {
   ForbiddenException([String? message])

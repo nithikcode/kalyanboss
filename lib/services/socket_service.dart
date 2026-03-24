@@ -1,9 +1,8 @@
+import 'package:kalyanboss/config/constants.dart';
+import 'package:kalyanboss/services/session_manager.dart';
+import 'package:kalyanboss/utils/helpers/helpers.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
-
-import '../../config/constants.dart';
-import '../../services/session_manager.dart';
-import '../utils/helpers/helpers.dart';
 
 class SocketService {
   static final SocketService _instance = SocketService._internal();

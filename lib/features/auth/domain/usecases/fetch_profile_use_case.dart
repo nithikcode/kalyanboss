@@ -1,17 +1,15 @@
 import 'package:dartz/dartz.dart';
 import 'package:kalyanboss/features/auth/data/repository/auth_repository_impl.dart';
 import 'package:kalyanboss/features/auth/domain/entities/user_entity.dart';
-import 'package:kalyanboss/features/auth/domain/entities/verify_otp_entity.dart';
 import 'package:kalyanboss/utils/api/api_error.dart';
 import 'package:kalyanboss/utils/api/api_result.dart';
 
-class VerifyUseCase {
+class FetchProfileUseCase {
   final AuthRepositoryImpl authRepository;
 
-  VerifyUseCase({required this.authRepository});
+  FetchProfileUseCase({required this.authRepository});
 
-  Future<Either<Result<VerifyOtpEntity>, ApiError>>call(Map<String,dynamic> data) async {
-    return await authRepository.verify(data);
-
+  Future<Either<Result<UserEntity>, ApiError>> call(Map<String, dynamic> data,) async {
+    return await authRepository.fetchProfile(data);
   }
 }

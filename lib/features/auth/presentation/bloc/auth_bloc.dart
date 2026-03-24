@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:kalyanboss/features/auth/domain/entities/signup_entity.dart';
 import 'package:kalyanboss/features/auth/domain/entities/user_entity.dart';
+import 'package:kalyanboss/features/auth/domain/entities/verify_otp_entity.dart';
 import 'package:kalyanboss/features/auth/domain/usecases/auth_use_cases.dart';
 import 'package:kalyanboss/services/session_manager.dart';
 import 'package:kalyanboss/utils/bloc/api_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:kalyanboss/utils/helpers/helpers.dart';
 
 part 'auth_event.dart';
 part 'auth_state.dart';
@@ -17,173 +19,60 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SessionManager sessionManager;
 
   AuthBloc({required this.authUseCases, required this.sessionManager})
-      : super(AuthState(userEntity: ApiState.initial(), signupEntity: ApiState.initial(), otpState: ApiState.initial())) {
-    // on<LoginEvent>(_login);
-    // on<VerifyEvent>(_verify);
-    // on<ResetLoginStateEvent>(_resetLoginState);
+      : super(AuthState(userEntity: ApiState.initial(), signupEntity: ApiState.initial(), otpState: ApiState.initial(), verifyOtpState: ApiState.initial())) {
+    on<LoginEvent>(_login);
+    on<VerifyOtpEvent>(_verify);
+    on<FetchProfileEvent>(_fetchProfile);
     on<CheckAuthStatusEvent>(_checkAuthStatus);
-    // on<LogoutEvent>(_logout);
+    on<LogoutEvent>(_logout);
     on<RegisterEvent>(_register);
     on<SendOtpEvent>(_sendOtp);
 
     // Check auth status on initialization
     add(CheckAuthStatusEvent());
   }
+  Future<void> _logout(LogoutEvent event, Emitter<AuthState> emit) async {
+    // 1. Clear the physical storage
+    await sessionManager.clearSession();
 
+    // 2. Emit the "Unauthenticated" state
+    emit(state.copyWith(
+      isAuthenticated: false,
+      userEntity: ApiState.initial(),
+      verifyOtpState: ApiState.initial(),
+      signupEntity: ApiState.initial(),
+    ));
+
+    // GoRouter's refreshListenable will now see this change and trigger the redirect!
+  }
   Future<void> _checkAuthStatus(
       CheckAuthStatusEvent event,
       Emitter<AuthState> emit,
       ) async {
     final isAuthenticated = sessionManager.isAuthenticated();
-    final user = sessionManager.getUserEntity;
 
-    if (isAuthenticated && user != null) {
-      emit(state.copyWith(
-        isAuthenticated: true,
-        userEntity: ApiState.success(user),
-        loginRequested: false,
-      ));
+    if (isAuthenticated) {
+      // 1. Immediately acknowledge we are logged in
+      emit(state.copyWith(isAuthenticated: true));
+
+      // 2. Automatically trigger the profile fetch to get fresh data
+      add(FetchProfileEvent());
     } else {
       emit(state.copyWith(
         isAuthenticated: false,
         userEntity: ApiState.initial(),
-        loginRequested: false,
       ));
     }
   }
 
-  // Future<void> _login(LoginEvent event, Emitter<AuthState> emit) async {
-  //   // 1. Basic Validation
-  //   if (event.mobile.trim().isEmpty || event.password.trim().isEmpty) {
-  //     return; // You could emit an error state here if preferred
-  //   }
-  //
-  //   // 2. Set Loading State
-  //   emit(state.copyWith(userEntity: ApiState.loading()));
-  //
-  //   final data = {
-  //     'phone': event.mobile,
-  //     'password': event.password, // Added password to payload
-  //   };
-  //
-  //   final result = await authUseCases.loginUseCase.call(data);
-  //
-  //   await result.fold(
-  //         (success) async {
-  //       if (success.isSuccess && success.data != null) {
-  //         final userData = success.data!;
-  //
-  //         // 3. Store session immediately since we are logging in directly
-  //         await sessionManager.setSession(
-  //           jwtAccessToken: userData.accessToken,
-  //           jwtRefreshToken: userData.refreshToken,
-  //           userId: userData.id.toString(),
-  //           userEntity: userData,
-  //         );
-  //
-  //         emit(state.copyWith(
-  //           userEntity: ApiState.success(userData),
-  //           isAuthenticated: true,
-  //         ));
-  //       } else {
-  //         emit(state.copyWith(userEntity: ApiState.error("Invalid credentials")));
-  //       }
-  //     },
-  //         (error) async {
-  //       emit(state.copyWith(userEntity: ApiState.error(error.message)));
-  //       await Fluttertoast.showToast(msg: error.message ?? 'Login failed');
-  //     },
-  //   );
-  // }
-  // Future<void> _verify(VerifyEvent event, Emitter<AuthState> emit) async {
-  //   final data = {
-  //     'phone': event.mobile,
-  //     'otp': event.otp,
-  //   };
-  //
-  //   final result = await authUseCases.verifyUseCase.call(data);
-  //
-  //   await result.fold(
-  //         (success) async {
-  //       if (success.isSuccess) {
-  //         final userData = success.data;
-  //
-  //         // Store session with user entity
-  //         await sessionManager.setSession(
-  //           jwtAccessToken: userData?.accessToken,
-  //           jwtRefreshToken: userData?.refreshToken,
-  //           userId: userData?.id.toString(),
-  //           userEntity: userData, // Store the entire user entity
-  //         );
-  //
-  //         await Fluttertoast.showToast(
-  //           webPosition: "top",
-  //           msg: 'Logged in successfully',
-  //           backgroundColor: Colors.green,
-  //         );
-  //
-  //         emit(state.copyWith(
-  //           loginRequested: false,
-  //           userEntity: ApiState.success(userData!),
-  //           isAuthenticated: true,
-  //         ));
-  //       } else {
-  //         emit(state.copyWith(
-  //           loginRequested: true,
-  //           userEntity: ApiState.error("Verification failed"),
-  //         ));
-  //         await Fluttertoast.showToast(
-  //           webPosition: "top",
-  //           msg: 'Verification failed',
-  //           backgroundColor: Colors.red,
-  //         );
-  //       }
-  //     },
-  //         (error) async {
-  //       emit(state.copyWith(
-  //         loginRequested: true,
-  //         userEntity: ApiState.error(error.message),
-  //       ));
-  //       await Fluttertoast.showToast(
-  //         msg: error.message ?? 'Invalid OTP',
-  //         backgroundColor: Colors.red,
-  //       );
-  //     },
-  //   );
-  // }
-  //
-  // Future<void> _logout(LogoutEvent event, Emitter<AuthState> emit) async {
-  //   await sessionManager.clearSession();
-  //   emit(state.copyWith(
-  //     loginRequested: false,
-  //     userEntity: ApiState.initial(),
-  //     isAuthenticated: false,
-  //   ));
-  //
-  //   await Fluttertoast.showToast(
-  //     webPosition: "top",
-  //     msg: 'Logged out successfully',
-  //     backgroundColor: Colors.green,
-  //   );
-  // }
-  //
-  // Future<void> _resetLoginState(ResetLoginStateEvent event, Emitter<AuthState> emit,) async {
-  //   await sessionManager.clearSession();
-  //   emit(state.copyWith(
-  //     loginRequested: false,
-  //     userEntity: ApiState.initial(),
-  //     isAuthenticated: false,
-  //   ));
-  // }
+
 
   Future<void> _register(RegisterEvent event, Emitter<AuthState> emit) async {
-    // 1. Basic Validation
     if (event.mobile.trim().isEmpty || event.password.trim().isEmpty) {
       emit(state.copyWith(signupEntity: ApiState.error("Please fill all fields")));
       return;
     }
 
-    // 2. Set Loading State
     emit(state.copyWith(signupEntity: ApiState.loading()));
 
     final data = {
@@ -194,47 +83,38 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     final result = await authUseCases.signUpUseCase.call(data);
 
-    // 3. Handle Result (Left is Success, Right is Failure)
     await result.fold(
           (successResponse) async {
-        // --- Handle SUCCESS (Left) ---
         if (successResponse.data != null) {
-          // Map the Model to Entity using your extension
-          final data = successResponse.data;
+          final data = successResponse.data!;
 
           emit(state.copyWith(
-            signupEntity: ApiState.success(data!),
-            isAuthenticated: true,
+            signupEntity: ApiState.success(data),
+            // IMPORTANT: Keep isAuthenticated: false here.
+            // Only set to true AFTER OTP is verified.
+            isAuthenticated: false,
           ));
 
-          // Display the specific message from the server (e.g., "Account created!")
           await Fluttertoast.showToast(
-            msg: data.message,
+            msg: data.message ?? "",
             backgroundColor: Colors.green,
-            gravity: ToastGravity.BOTTOM,
           );
+
+          // --- TRIGGER OTP AUTOMATICALLY ---
+          // Use 'add' to fire the existing _sendOtp logic using the mobile from the event
+          add(SendOtpEvent(mobile: event.mobile));
+
         } else {
-          // Fallback if data is null despite 200 OK
-          const fallbackMsg = "Registration successful!";
-          emit(state.copyWith(signupEntity: ApiState.error(fallbackMsg)));
-          await Fluttertoast.showToast(msg: fallbackMsg);
+          emit(state.copyWith(signupEntity: ApiState.error("Registration successful but no data received")));
         }
       },
           (failure) async {
         final errorMsg = failure.message ?? 'Signup failed';
-
         emit(state.copyWith(signupEntity: ApiState.error(errorMsg)));
-
-        // Display server error message (e.g., "Mobile already exists")
-        await Fluttertoast.showToast(
-          msg: errorMsg,
-          backgroundColor: Colors.red,
-          textColor: Colors.white,
-        );
+        await Fluttertoast.showToast(msg: errorMsg, backgroundColor: Colors.red);
       },
     );
   }
-
   FutureOr<void> _sendOtp(SendOtpEvent event, Emitter<AuthState> emit) async {
     // 1. Basic Validation
     if (event.mobile.trim().isEmpty || event.mobile.length < 10) {
@@ -246,7 +126,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(state.copyWith(otpState: ApiState.loading()));
 
     final data = {
-      'phone': event.mobile,
+      'mobile': event.mobile,
       // Add any other params your backend requires for OTP (e.g., 'type': 'register')
     };
 
@@ -281,6 +161,133 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           backgroundColor: Colors.red,
           textColor: Colors.white,
         );
+      },
+    );
+  }
+
+
+  Future<void> _verify(VerifyOtpEvent event, Emitter<AuthState> emit) async {
+    if (event.otp.length < 6) {
+      emit(state.copyWith(verifyOtpState: ApiState.error("Enter a valid 6-digit OTP")));
+      return;
+    }
+
+    emit(state.copyWith(verifyOtpState: ApiState.loading()));
+
+    final data = {
+      'mobile': event.mobile,
+      'otp': event.otp,
+    };
+
+    final result = await authUseCases.verifyUseCase.call(data);
+
+    await result.fold(
+          (successResponse) async {
+        final entity = successResponse.data;
+
+        if (entity != null) {
+          createLog("Userid ${entity.id}");
+          // 1. Save Token and Session
+          await sessionManager.setSession(jwtAccessToken: entity.token,userId: entity.id);
+
+          // 2. Update Bloc State to Authenticated
+          emit(state.copyWith(
+            verifyOtpState: ApiState.success(entity),
+            isAuthenticated: true,
+          ));
+          add(FetchProfileEvent());
+          await Fluttertoast.showToast(
+            msg: entity.message,
+            backgroundColor: Colors.green,
+          );
+        }
+      },
+          (failure) async {
+        final errorMsg = failure.message ?? 'Verification failed';
+        emit(state.copyWith(verifyOtpState: ApiState.error(errorMsg)));
+        await Fluttertoast.showToast(msg: errorMsg, backgroundColor: Colors.red);
+      },
+    );
+  }
+
+  Future<void> _login(LoginEvent event, Emitter<AuthState> emit) async {
+    if (event.password.isEmpty && event.mobile.isEmpty) {
+      emit(state.copyWith(verifyOtpState: ApiState.error("Mobile and Password are required")));
+      return;
+    }
+
+    emit(state.copyWith(verifyOtpState: ApiState.loading()));
+
+    final data = {
+      'mobile': event.mobile,
+      'password': event.password,
+    };
+
+    final result = await authUseCases.loginUseCase.call(data);
+
+    await result.fold(
+          (successResponse) async {
+        final entity = successResponse.data;
+
+        if (entity != null) {
+          createLog("Userid ${entity.id}");
+
+          // 1. Save Token and Session
+          await sessionManager.setSession(jwtAccessToken: entity.token, userId: entity.id);
+
+          // 2. Update Bloc State to Authenticated
+          emit(state.copyWith(
+            verifyOtpState: ApiState.success(entity),
+            isAuthenticated: true,
+          ));
+          add(FetchProfileEvent());
+          await Fluttertoast.showToast(
+            msg: entity.message,
+            backgroundColor: Colors.green,
+          );
+        }
+      },
+          (failure) async {
+        final errorMsg = failure.message ?? 'Verification failed';
+        emit(state.copyWith(verifyOtpState: ApiState.error(errorMsg)));
+        await Fluttertoast.showToast(msg: errorMsg, backgroundColor: Colors.red);
+      },
+    );
+  }
+
+  Future<void> _fetchProfile(FetchProfileEvent event, Emitter<AuthState> emit) async {
+    createLog("!!! FETCH PROFILE EVENT TRIGGERED !!!"); // <--- ADD THIS
+    emit(state.copyWith(userEntity: ApiState.loading()));
+  createLog("Userid is ${sessionManager.getUserId}");
+    final data = {
+      'id': sessionManager.getUserId,
+    };
+
+    final result = await authUseCases.fetchProfileUseCase.call(data);
+
+    await result.fold(
+          (successResponse) async {
+        final entity = successResponse.data;
+
+        if (entity != null) {
+          createLog("UserModel ${entity}");
+
+          // 1. Save Token and Session
+          await sessionManager.setSession(jwtAccessToken: entity.token, userId: entity.id, userEntity: entity);
+
+
+          // 2. Update Bloc State to Authenticated
+          emit(state.copyWith(
+            userEntity: ApiState.success(entity),
+            isAuthenticated: true,
+          ));
+
+        }
+      },
+          (failure) async {
+        final errorMsg = failure.message ?? 'Verification failed';
+        emit(state.copyWith(userEntity: ApiState.error(errorMsg)));
+        await Fluttertoast.showToast(msg: errorMsg, backgroundColor: Colors.red);
       },
     );
   }

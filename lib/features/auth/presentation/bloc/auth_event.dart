@@ -22,6 +22,12 @@ class SendOtpEvent extends AuthEvent {
 
   SendOtpEvent({required this.mobile});
 }
+class VerifyOtpEvent extends AuthEvent {
+  final String mobile;
+  final String otp;
+
+  VerifyOtpEvent({required this.mobile, required this.otp});
+}
 class VerifyEvent extends AuthEvent {
   final String mobile;
   final String otp;
@@ -29,6 +35,7 @@ class VerifyEvent extends AuthEvent {
   VerifyEvent({required this.mobile, required this.otp});
 }
 
+class FetchProfileEvent extends AuthEvent {}
 class LogoutEvent extends AuthEvent {}
 
 class ResetLoginStateEvent extends AuthEvent {}

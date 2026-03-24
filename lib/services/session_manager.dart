@@ -3,10 +3,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:kalyanboss/features/auth/domain/entities/user_entity.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/auth/data/model/user_model.dart';
-import '../features/auth/domain/entities/user_entity.dart';
 
 class SessionManager {
   SessionManager._internal();
@@ -63,15 +63,46 @@ class SessionManager {
 
     // Convert entity to model for storage
     if (userEntity != null) {
-      _userModel = UserModel(
+      _userModel =_userModel = UserModel(
         id: userEntity.id,
-        name: userEntity.name,
-        email: userEntity.email,
-        phone: userEntity.phone,
-        role: userEntity.role,
-        isVerified: userEntity.isVerified,
-        refreshToken: userEntity.refreshToken,
-        accessToken: userEntity.accessToken,
+        userName: userEntity.userName,
+        fullName: userEntity.fullName,
+        city: userEntity.city,
+        state: userEntity.state,
+        language: userEntity.language,
+        mobile: userEntity.mobile,
+        wallet: userEntity.wallet,
+        verified: userEntity.verified,
+        otpVerified: userEntity.otpVerified,
+        token: userEntity.token,
+        status: userEntity.status,
+        isShow: userEntity.isShow,
+        branchName: userEntity.branchName,
+        bankName: userEntity.bankName,
+        accountHolderName: userEntity.accountHolderName,
+        accountNo: userEntity.accountNo,
+        ifscCode: userEntity.ifscCode,
+        referralCode: userEntity.referralCode,
+        upiId: userEntity.upiId,
+        upiNumber: userEntity.upiNumber,
+        betting: userEntity.betting,
+        transfer: userEntity.transfer,
+        fcm: userEntity.fcm,
+        personalNotification: userEntity.personalNotification,
+        mainNotification: userEntity.mainNotification,
+        starlineNotification: userEntity.starlineNotification,
+        galidisawarNotification: userEntity.galidisawarNotification,
+        transactionBlockedUntil: userEntity.transactionBlockedUntil?.toIso8601String(),
+        transactionPermanentlyBlocked: userEntity.transactionPermanentlyBlocked,
+        chatBlocked: userEntity.chatBlocked,
+        coins: userEntity.coins,
+        lastCoinRefill: userEntity.lastCoinRefill?.toIso8601String(),
+        spinAttempts: userEntity.spinAttempts,
+        lastSpinRefill: userEntity.lastSpinRefill?.toIso8601String(),
+        createdAt: userEntity.createdAt?.toIso8601String(),
+        updatedAt: userEntity.updatedAt?.toIso8601String(),
+        authentication: userEntity.authentication,
+        lastLogin: userEntity.lastLogin?.toIso8601String(),
       );
     } else {
       _userModel = null;
