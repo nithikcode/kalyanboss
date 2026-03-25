@@ -5,9 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:kalyanboss/features/auth/domain/usecases/update_user_use_case.dart';
+import 'package:kalyanboss/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:kalyanboss/services/session_manager.dart';
 import '../config/constants.dart';
-import '../config/routes/route_names.dart';
-import '../config/routes/routes.dart';
 import '../utils/di/service_locator.dart';
 import '../utils/helpers/helpers.dart';
 import '../utils/helpers/notification_helper.dart';
@@ -39,10 +40,11 @@ class NotificationService {
     importance: Importance.max,
   );
 
-  Future<void> init() async {
+  /// Pass AuthBloc here so we can update the backend if the token refreshes
+  Future<void> init({required AuthBloc authBloc}) async {
     await _initLocalNotifications();
 
-    firebaseInit();
+    firebaseInit(authBloc: authBloc);
 
     // Clear badges when app starts
     await clearAllBadges();
@@ -50,65 +52,116 @@ class NotificationService {
     // Check and sync token on app start
     await _syncTokenOnStartup();
 
-    // Handle notification taps when app was terminated
+    // 1. Handle notification taps when app is launched from TERMINATED state
     final details = await _flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
 
     if (details != null && details.didNotificationLaunchApp) {
       final response = details.notificationResponse;
-
-      // Clear badges when notification is tapped from terminated state
       await clearAllBadges();
 
-      // if (response?.payload != null) {
-      //   try {
-      //     final Map<String, dynamic> payloadData =
-      //     json.decode(response!.payload!);
-      //
-      //     if (response.actionId == 'track') {
-      //       final orderId = payloadData['orderId'];
-      //       final mobile = payloadData['mobile'];
-      //
-      //       Future.delayed(const Duration(milliseconds: 500), () {
-      //         navigatorKey.currentState?.pushNamed(
-      //           RouteNames.orderInfoScreen,
-      //           arguments: {
-      //             'orderId': orderId,
-      //             'phone': mobile,
-      //           },
-      //         );
-      //       });
-      //     } else if (response.actionId == 'support') {
-      //       Future.delayed(const Duration(milliseconds: 500), () {
-      //         navigatorKey.currentState?.pushNamed(RouteNames.support);
-      //       });
-      //     } else if (payloadData['type'] == 'order_details') {
-      //       Future.delayed(const Duration(milliseconds: 500), () {
-      //         navigatorKey.currentState?.pushNamed(
-      //           RouteNames.orderInfoScreen,
-      //           arguments: {
-      //             'orderId': payloadData['orderId'],
-      //             'phone': payloadData['phone'],
-      //           },
-      //         );
-      //       });
-      //     }
-      //   } catch (e) {
-      //     createLog('Error handling launch payload: $e');
-      //   }
-      // }
+      if (response?.payload != null) {
+        _handleNotificationClick(response!.payload);
+      }
     }
 
-    // Clear badges when notification is tapped from background
+    // 2. Handle notification taps when app is in BACKGROUND
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
       createLog('Notification tapped while in background: ${message.data}');
       await clearAllBadges();
+
+      // Pass the data map as a JSON string to our unified handler
+      _handleNotificationClick(jsonEncode(message.data));
     });
 
+    // 3. Fallback for terminated state from Firebase directly
     FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) async {
       if (message != null) {
-        createLog('App launched from terminated state by notification: ${message.data}');
+        createLog('App launched from terminated state by Firebase: ${message.data}');
         await clearAllBadges();
+        _handleNotificationClick(jsonEncode(message.data));
       }
+    });
+  }
+
+  /// Unified Handler for ALL Notification Clicks using GoRouter
+  void _handleNotificationClick(String? payload) {
+    if (payload == null) return;
+
+    try {
+      final Map<String, dynamic> data = jsonDecode(payload);
+      final String? type = data['type'];
+
+      createLog('Handling notification click with payload: $data');
+
+      // // Use GoRouter for navigation
+      // if (type == 'order_details' || type == 'track') {
+      //   // Example of passing arguments via GoRouter 'extra'
+      //   // Ensure your GoRoute is set up to receive this map
+      //   AppRouter.router.pushNamed(
+      //     RouteNames.orderInfoScreen, // Make sure this matches your router
+      //     extra: {
+      //       'orderId': data['orderId'],
+      //       'phone': data['mobile'] ?? data['phone'],
+      //     },
+      //   );
+      // } else if (type == 'support' || data['actionId'] == 'support') {
+      //   AppRouter.router.pushNamed(RouteNames.support); // Match your GoRoute name
+      // } else if (type == 'game_update') {
+      //   AppRouter.router.pushNamed(RouteNames.gameScreen);
+      // }
+
+    } catch (e) {
+      createLog('Error parsing notification payload: $e');
+    }
+  }
+
+  Future<void> _initLocalNotifications() async {
+    var androidInitialization = const AndroidInitializationSettings("@mipmap/ic_launcher");    var iosInitialization = const DarwinInitializationSettings();
+
+    var initializationSettings = InitializationSettings(
+      android: androidInitialization,
+      iOS: iosInitialization,
+    );
+
+    await _flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      // 4. Handle notification taps when app is in FOREGROUND
+      onDidReceiveNotificationResponse: (response) async {
+        createLog("Foreground notification tapped. Payload raw = ${response.payload}");
+        await clearAllBadges();
+        _handleNotificationClick(response.payload);
+      },
+    );
+
+    await NotificationHelpers.createNotificationChannels(
+        _flutterLocalNotificationsPlugin);
+  }
+
+  void firebaseInit({AuthBloc? authBloc}) {
+    // Listen for Token Refresh from Firebase
+    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+      createLog("FCM Token Refreshed: $newToken");
+
+      // Keep the local generic backend updated
+      sendTokenToBackend(newToken);
+
+      // Also update the specific user's entity via BLoC if logged in
+      if (authBloc != null) {
+        authBloc.add(UpdateUserEvent(fcm: newToken, fullName: null));
+      }
+    });
+
+    // Listen for messages while app is open and in foreground
+    FirebaseMessaging.onMessage.listen((message) {
+      if (kDebugMode) {
+        createLog("notification data ========> ${message.data}");
+        createLog("notification body ========> ${message.notification?.body}");
+      }
+
+      NotificationHelpers.showAdvancedNotification(
+        message,
+        _flutterLocalNotificationsPlugin,
+      );
     });
   }
 
@@ -116,23 +169,10 @@ class NotificationService {
   Future<void> clearAllBadges() async {
     try {
       if (Platform.isAndroid) {
-        final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
-        _flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-
-        // Cancel all notifications to clear badges
         await _flutterLocalNotificationsPlugin.cancelAll();
         createLog("✅ All notification badges cleared (Android)");
       } else if (Platform.isIOS) {
-        // For iOS, set badge count to 0
-        final IOSFlutterLocalNotificationsPlugin? iosPlugin =
-        _flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>();
-
-        // Clear badge count
         await _flutterLocalNotificationsPlugin.cancelAll();
-
-        // Also reset Firebase badge count
         await firebaseMessaging.setAutoInitEnabled(true);
         createLog("✅ All notification badges cleared (iOS)");
       }
@@ -153,24 +193,21 @@ class NotificationService {
       final storedToken = await _storage.read(key: _tokenKey);
       final tokenSent = await _storage.read(key: _tokenSentKey);
 
-      // Token changed OR never sent successfully
       if (storedToken != currentToken || tokenSent != 'true') {
-        createLog("Token needs sync: stored=$storedToken, current=$currentToken, sent=$tokenSent");
+        createLog("Token needs sync");
         await sendTokenToBackend(currentToken);
         await _storage.write(key: _tokenKey, value: currentToken);
         await _storage.write(
           key: _tokenTimestampKey,
           value: DateTime.now().millisecondsSinceEpoch.toString(),
         );
-      } else {
-        createLog("Token already synced");
       }
     } catch (e) {
       createLog("Error syncing token on startup: $e");
     }
   }
 
-  /// Verify token periodically (call this from splash or home screen)
+  /// Verify token periodically
   Future<void> verifyAndSyncToken() async {
     try {
       final currentToken = await firebaseMessaging.getToken();
@@ -179,7 +216,6 @@ class NotificationService {
       final storedToken = await _storage.read(key: _tokenKey);
       final timestampStr = await _storage.read(key: _tokenTimestampKey);
 
-      // If token changed or not synced in last 7 days, re-sync
       final shouldSync = storedToken != currentToken ||
           timestampStr == null ||
           _shouldResyncBasedOnTime(timestampStr);
@@ -203,9 +239,9 @@ class NotificationService {
       final timestamp = int.parse(timestampStr);
       final lastSync = DateTime.fromMillisecondsSinceEpoch(timestamp);
       final daysSinceSync = DateTime.now().difference(lastSync).inDays;
-      return daysSinceSync >= 7; // Re-sync every 7 days
+      return daysSinceSync >= 7;
     } catch (e) {
-      return true; // If parsing fails, force sync
+      return true;
     }
   }
 
@@ -227,11 +263,9 @@ class NotificationService {
     }
   }
 
-  Future<NotificationSettings> requestNotificationPermissions(
-      BuildContext context) async {
+  Future<NotificationSettings> requestNotificationPermissions(BuildContext context) async {
     try {
-      NotificationSettings settings =
-      await FirebaseMessaging.instance.requestPermission(
+      NotificationSettings settings = await FirebaseMessaging.instance.requestPermission(
         alert: true,
         announcement: true,
         carPlay: false,
@@ -240,14 +274,6 @@ class NotificationService {
         provisional: false,
         sound: true,
       );
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        createLog("User granted notification permission");
-      } else if (settings.authorizationStatus ==
-          AuthorizationStatus.provisional) {
-        createLog("User granted provisional permission");
-      } else {
-        createLog("User denied permission");
-      }
       return settings;
     } catch (e) {
       createLog("Error requesting notification permissions: $e");
@@ -268,81 +294,6 @@ class NotificationService {
     }
   }
 
-  Future<void> _initLocalNotifications() async {
-    var androidInitialization =
-    const AndroidInitializationSettings("ic_notification");
-    var iosInitialization = const DarwinInitializationSettings();
-
-    var initializationSettings = InitializationSettings(
-      android: androidInitialization,
-      iOS: iosInitialization,
-    );
-
-    await _flutterLocalNotificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (response) async {
-        createLog("payload raw = ${response.payload}");
-
-        // Clear badges when any notification is tapped
-        await clearAllBadges();
-
-        if (response.payload != null) {
-          final data = jsonDecode(response.payload!);
-
-          if (data == null) {
-            return;
-          }
-
-          final orderId = data['orderId'];
-          final mobile = data['mobile'];
-          final type = data['type'];
-
-          // if(type == "order_details"){
-          //   navigatorKey.currentState?.pushNamed(
-          //     RouteNames.orderInfoScreen,
-          //     arguments: {
-          //       "orderId": orderId,
-          //       "phone": mobile,
-          //     },
-          //   );
-          // }
-          //
-          // if (response.actionId == 'track') {
-          //   navigatorKey.currentState?.pushNamed(
-          //     RouteNames.orderInfoScreen,
-          //     arguments: {
-          //       "orderId": orderId,
-          //       "phone": mobile,
-          //     },
-          //   );
-          // }
-          //
-          // if (response.actionId == 'support') {
-          //   navigatorKey.currentState?.pushNamed(RouteNames.support);
-          // }
-        }
-      },
-    );
-
-    await NotificationHelpers.createNotificationChannels(
-      _flutterLocalNotificationsPlugin,
-    );
-  }
-
-  void firebaseInit() {
-    FirebaseMessaging.onMessage.listen((message) {
-      if (kDebugMode) {
-        createLog("notification data ========> ${message.data}");
-        createLog("notification body ========> ${message.notification?.body}");
-      }
-
-      NotificationHelpers.showAdvancedNotification(
-        message,
-        _flutterLocalNotificationsPlugin,
-      );
-    });
-  }
-
   Future<void> showAdvancedNotification(RemoteMessage message) async {
     await NotificationHelpers.showAdvancedNotification(
       message,
@@ -350,40 +301,42 @@ class NotificationService {
     );
   }
 
-  /// Enhanced token sending with better error handling and status tracking
   Future<void> sendTokenToBackend(String token, {String? userId}) async {
     try {
       createLog("Sending FCM token to backend...");
 
-      final result = await sl<NetworkServicesApi>().postApi(
-        '${AppUrl.baseUrl}/appToken',
-        {
-          'token': token,
-          'platform': Platform.isAndroid ? 'android' : 'ios',
-          'timestamp': DateTime.now().toIso8601String(),
+      // 1. Prepare the data (only sending what's needed)
+      final requestData = {
+        // 'id': userId ?? sl<SessionManager>().getUserId,
+        'fcm': token,
+        // 'platform': Platform.isAndroid ? 'android' : 'ios',
+      };
+
+      // 2. Call the UseCase directly (sl should have UpdateUserUseCase registered)
+      final result = await sl<UpdateUserUseCase>().call(requestData);
+
+      // 3. Handle the Either (Left: Success, Right: Failure)
+      await result.fold(
+            (successResponse) async {
+          await _storage.write(key: _tokenSentKey, value: 'true');
+          createLog("✅ FCM Token successfully synced via UseCase.");
+
+          // Optional: Trigger a fetch profile in the Bloc to keep UI in sync
+          sl<AuthBloc>().add(FetchProfileEvent());
+        },
+            (failure) async {
+          await _storage.write(key: _tokenSentKey, value: 'false');
+          createLog("❌ Failed to sync token: ${failure.message}");
+          _scheduleTokenRetry(token);
         },
       );
-
-      if (result.statusCode == 200 || result.statusCode == 201) {
-        // Mark as successfully sent
-        await _storage.write(key: _tokenSentKey, value: 'true');
-        createLog("FCM Token successfully sent/updated on backend. ${result.body}");
-      } else {
-        // Failed, mark as not sent
-        await _storage.write(key: _tokenSentKey, value: 'false');
-        createLog("Backend returned non-success: ${result.statusCode}");
-      }
     } catch (e) {
-      // Failed, mark as not sent
+      createLog("❌ Exception in sendTokenToBackend: $e");
       await _storage.write(key: _tokenSentKey, value: 'false');
-      createLog("Error sending FCM token to backend: $e");
-
-      // Schedule retry
       _scheduleTokenRetry(token);
     }
   }
 
-  /// Schedule a retry for token sending
   void _scheduleTokenRetry(String token) {
     Future.delayed(const Duration(seconds: 30), () async {
       try {
@@ -422,15 +375,11 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.high,
       icon: 'ic_notification',
-      ticker: 'ticker',
     );
-
-    const DarwinNotificationDetails darwinNotificationDetails =
-    DarwinNotificationDetails();
 
     const NotificationDetails notificationDetails = NotificationDetails(
       android: androidNotificationDetails,
-      iOS: darwinNotificationDetails,
+      iOS: DarwinNotificationDetails(),
     );
 
     await _flutterLocalNotificationsPlugin.show(
@@ -448,12 +397,7 @@ class NotificationService {
 
   Future<String?> getDeviceToken() async {
     try {
-      String? token = await firebaseMessaging.getToken();
-      if (token == null) {
-        createLog("FCM token is null");
-        return null;
-      }
-      return token;
+      return await firebaseMessaging.getToken();
     } catch (e) {
       createLog("Error getting device token: $e");
       return null;

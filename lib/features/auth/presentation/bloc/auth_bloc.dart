@@ -1,14 +1,17 @@
 import 'dart:async';
 
+import 'package:kalyanboss/features/auth/domain/entities/setting_entity.dart';
 import 'package:kalyanboss/features/auth/domain/entities/signup_entity.dart';
 import 'package:kalyanboss/features/auth/domain/entities/user_entity.dart';
 import 'package:kalyanboss/features/auth/domain/entities/verify_otp_entity.dart';
 import 'package:kalyanboss/features/auth/domain/usecases/auth_use_cases.dart';
+import 'package:kalyanboss/services/notification_manager.dart';
 import 'package:kalyanboss/services/session_manager.dart';
 import 'package:kalyanboss/utils/bloc/api_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:kalyanboss/utils/di/service_locator.dart';
 import 'package:kalyanboss/utils/helpers/helpers.dart';
 
 part 'auth_event.dart';
@@ -19,14 +22,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SessionManager sessionManager;
 
   AuthBloc({required this.authUseCases, required this.sessionManager})
-      : super(AuthState(userEntity: ApiState.initial(), signupEntity: ApiState.initial(), otpState: ApiState.initial(), verifyOtpState: ApiState.initial())) {
+      : super(AuthState(userEntity: ApiState.initial(), signupEntity: ApiState.initial(), otpState: ApiState.initial(), verifyOtpState: ApiState.initial(), updateUserState: ApiState.initial(), fetchSettingEntity: ApiState.initial())) {
     on<LoginEvent>(_login);
     on<VerifyOtpEvent>(_verify);
     on<FetchProfileEvent>(_fetchProfile);
+    on<FetchSettingEvent>(_fetchSetting);
     on<CheckAuthStatusEvent>(_checkAuthStatus);
     on<LogoutEvent>(_logout);
     on<RegisterEvent>(_register);
     on<SendOtpEvent>(_sendOtp);
+    on<UpdateUserEvent>(_updateUser);
 
     // Check auth status on initialization
     add(CheckAuthStatusEvent());
@@ -57,6 +62,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       // 2. Automatically trigger the profile fetch to get fresh data
       add(FetchProfileEvent());
+      add(FetchSettingEvent());
+
+      final token = await sl<NotificationService>().getDeviceToken();
+      if (token != null) {
+        add(UpdateUserEvent(fcm: token, fullName: null));
+      }
     } else {
       emit(state.copyWith(
         isAuthenticated: false,
@@ -196,6 +207,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             isAuthenticated: true,
           ));
           add(FetchProfileEvent());
+          add(FetchSettingEvent());
+
+          final fcmToken = await sl<NotificationService>().getDeviceToken();
+          if (fcmToken != null) {
+            add(UpdateUserEvent(fcm: fcmToken, fullName: null));
+          }
           await Fluttertoast.showToast(
             msg: entity.message,
             backgroundColor: Colors.green,
@@ -241,6 +258,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             isAuthenticated: true,
           ));
           add(FetchProfileEvent());
+          add(FetchSettingEvent());
+
+          final fcmToken = await sl<NotificationService>().getDeviceToken();
+          if (fcmToken != null) {
+            add(UpdateUserEvent(fcm: fcmToken, fullName: null));
+          }
           await Fluttertoast.showToast(
             msg: entity.message,
             backgroundColor: Colors.green,
@@ -287,6 +310,71 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           (failure) async {
         final errorMsg = failure.message ?? 'Verification failed';
         emit(state.copyWith(userEntity: ApiState.error(errorMsg)));
+        await Fluttertoast.showToast(msg: errorMsg, backgroundColor: Colors.red);
+      },
+    );
+  }
+  FutureOr<void> _updateUser(UpdateUserEvent event, Emitter<AuthState> emit) async {
+    emit(state.copyWith(updateUserState: ApiState.loading()));
+
+    // 1. Build a dynamic map including only non-empty values
+    final Map<String, dynamic> requestData = {
+      // 'id': sessionManager.getUserId, // Usually required to identify the user
+      if (event.fcm != null && event.fcm!.isNotEmpty) 'fcm': event.fcm,
+      if (event.fullName != null && event.fullName!.isNotEmpty) 'full_name': event.fullName,
+    };
+
+    // 2. Safety Check: If only 'id' is present, no need to call the API
+    if (requestData.isEmpty) {
+      emit(state.copyWith(updateUserState: ApiState.initial()));
+      return;
+    }
+
+    final result = await authUseCases.updateUserUseCase.call(requestData);
+
+    await result.fold(
+          (successResponse) async {
+        emit(state.copyWith(updateUserState: ApiState.success(true)));
+
+        // await Fluttertoast.showToast(
+        //   msg: "Profile updated successfully",
+        //   backgroundColor: Colors.green,
+        // );
+        createLog("Fcm token updated ${successResponse.data}");
+
+      },
+          (failure) async {
+        final errorMsg = failure.message ?? 'Update failed';
+        emit(state.copyWith(updateUserState: ApiState.error(errorMsg)));
+        await Fluttertoast.showToast(msg: errorMsg, backgroundColor: Colors.red);
+      },
+    );
+  }
+
+  Future<void> _fetchSetting(FetchSettingEvent event, Emitter<AuthState> emit) async {
+    createLog("!!! FETCH SETTING EVENT TRIGGERED !!!"); // <--- ADD THIS
+    emit(state.copyWith(fetchSettingEntity: ApiState.loading()));
+
+    final result = await authUseCases.fetchSettingsUseCase.call({});
+
+    await result.fold(
+          (successResponse) async {
+        final entity = successResponse.data;
+
+        if (entity != null) {
+          createLog("Setting Model ${entity}");
+
+          // 2. Update Bloc State to Authenticated
+          emit(state.copyWith(
+            fetchSettingEntity: ApiState.success(entity),
+            isAuthenticated: true,
+          ));
+
+        }
+      },
+          (failure) async {
+        final errorMsg = failure.message ?? 'Verification failed';
+        emit(state.copyWith(fetchSettingEntity: ApiState.error(errorMsg)));
         await Fluttertoast.showToast(msg: errorMsg, backgroundColor: Colors.red);
       },
     );

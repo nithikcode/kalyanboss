@@ -1,5 +1,6 @@
 import 'package:dartz/dartz.dart';
 import 'package:kalyanboss/features/auth/data/model/user_model.dart';
+import 'package:kalyanboss/features/auth/domain/entities/setting_entity.dart';
 import 'package:kalyanboss/features/auth/domain/entities/signup_entity.dart';
 import 'package:kalyanboss/features/auth/domain/entities/user_entity.dart';
 import 'package:kalyanboss/features/auth/domain/entities/verify_otp_entity.dart';
@@ -98,6 +99,42 @@ class AuthRepositoryImpl extends AuthRepository {
           return Left(Result.success(result));
         } else {
           return Right(ApiError(message: "fetchProfile Request failed"));
+        }
+      },
+          (error) {
+        return Right(ApiError(message: error.message));
+      },
+    );
+  }
+
+  @override
+  Future<Either<Result<String>, ApiError>> updateUser(Map<String, dynamic> data) async {
+    final res = await _remoteDataSource.updateUser(data);
+    return res.fold(
+          (success) {
+        if (success.isSuccess && success.data != null) {
+          final result = success.data!;
+          return Left(Result.success(result));
+        } else {
+          return Right(
+            ApiError(message: success.data ?? "User Update Request failed"),
+          );
+        }
+      },
+          (error) => Right(ApiError(message: error.message)),
+    );
+  }
+
+  @override
+  Future<Either<Result<SettingEntity>, ApiError>> fetchSettings(Map<String, dynamic> data) async {
+    final res = await _remoteDataSource.fetchSettings(data);
+    return res.fold(
+          (success) {
+        if (success.isSuccess) {
+          final result = success.data?.toEntity();
+          return Left(Result.success(result));
+        } else {
+          return Right(ApiError(message: "fetchSettings Request failed"));
         }
       },
           (error) {

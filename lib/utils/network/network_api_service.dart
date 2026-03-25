@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mime/mime.dart';
@@ -441,35 +442,43 @@ class _AuthInterceptor extends Interceptor {
 class _LoggingInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    final String requestPath = '${options.baseUrl}${options.path}';
 
-    createLog('│ REQUEST: ${options.method} ${options.uri}');
-    createLog('│ Headers: ${options.headers}');
+    dev.log('╔════ @@@ NETWORK REQUEST @@@', name: 'HTTP');
+    dev.log('║ METHOD: ${options.method}', name: 'HTTP');
+    dev.log('║ PATH: $requestPath', name: 'HTTP');
+    dev.log('║ QUERY: ${options.queryParameters}', name: 'HTTP');
+    dev.log('║ HEADERS: ${options.headers}', name: 'HTTP');
     if (options.data != null) {
-      createLog('│ Body: ${options.data}');
+      dev.log('║ BODY: ${options.data}', name: 'HTTP');
     }
+    dev.log('╚════════════════════════════', name: 'HTTP');
 
     super.onRequest(options, handler);
   }
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-
-    createLog('│ RESPONSE: ${response.statusCode} ${response.requestOptions.uri}');
-    createLog('│ Data: ${response.data}');
+    dev.log('╔════ @@@ NETWORK RESPONSE @@@', name: 'HTTP');
+    dev.log('║ STATUS: ${response.statusCode}', name: 'HTTP');
+    dev.log('║ PATH: ${response.requestOptions.path}', name: 'HTTP');
+    dev.log('║ DATA: ${response.data}', name: 'HTTP');
+    dev.log('╚════════════════════════════', name: 'HTTP');
 
     super.onResponse(response, handler);
   }
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-
-    createLog('│ ERROR: ${err.requestOptions.method} ${err.requestOptions.uri}');
-    createLog('│ Type: ${err.type}');
-    createLog('│ Message: ${err.message}');
-    if (err.response != null) {
-      createLog('│ Status: ${err.response?.statusCode}');
-      createLog('│ Data: ${err.response?.data}');
+    dev.log('╔════ @@@ NETWORK ERROR @@@', name: 'HTTP');
+    dev.log('║ STATUS: ${err.response?.statusCode}', name: 'HTTP');
+    dev.log('║ TYPE: ${err.type}', name: 'HTTP');
+    dev.log('║ MESSAGE: ${err.message}', name: 'HTTP');
+    dev.log('║ PATH: ${err.requestOptions.path}', name: 'HTTP');
+    if (err.response?.data != null) {
+      dev.log('║ ERROR DATA: ${err.response?.data}', name: 'HTTP');
     }
+    dev.log('╚════════════════════════════', name: 'HTTP');
 
     super.onError(err, handler);
   }

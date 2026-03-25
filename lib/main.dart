@@ -1,14 +1,16 @@
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kalyanboss/config/constants.dart';
+import 'package:kalyanboss/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:kalyanboss/features/base/presentation/bloc/base_bloc.dart';
+import 'package:kalyanboss/services/notification_manager.dart';
 import 'package:kalyanboss/utils/di/service_locator.dart' as di;
 import 'package:responsive_framework/responsive_framework.dart';
 import 'config/routes/routes.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
-
 import 'config/theme/theme.dart';
-import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/base/presentation/bloc/theme_bloc.dart';
 
 
@@ -16,8 +18,12 @@ void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
 
-
+  await Firebase.initializeApp();
   await di.init();
+
+  final notificationService = di.sl<NotificationService>();
+  final authBloc = di.sl<AuthBloc>();
+  await notificationService.init(authBloc: authBloc);
   usePathUrlStrategy();
   runApp(const MyApp());
 }

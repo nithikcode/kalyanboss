@@ -1,5 +1,6 @@
 
 import 'package:dartz/dartz.dart';
+import 'package:kalyanboss/features/auth/data/model/setting_model.dart';
 import 'package:kalyanboss/features/auth/data/model/user_model.dart';
 import 'package:kalyanboss/features/auth/data/model/verify_otp_response.dart';
 import 'package:kalyanboss/utils/api/api_error.dart';
@@ -15,6 +16,21 @@ class AuthRemoteDataSource extends BaseRemoteDataSource {
 
   AuthRemoteDataSource({NetworkServicesApi? api})
       : _api = api ?? NetworkServicesApi();
+
+  /// Settings -
+  Future<Either<Result<SettingModel>, ApiError>> fetchSettings(
+      Map<String, dynamic> data,
+      ) async {
+    return execute<SettingModel>(
+      apiCall: () => _api.getApi('/app/setting/get'),
+      onSuccess: (response) {
+        // Parse user from response
+        final data = SettingModel.fromJson(response);
+        return data;
+      },
+      operationName: 'Settings',
+    );
+  }
 
   /// Login -
   Future<Either<Result<VerifyOtpResponseModel>, ApiError>> login(
@@ -85,6 +101,17 @@ class AuthRemoteDataSource extends BaseRemoteDataSource {
         return data;
       },
       operationName: 'fetchProfile',
+    );
+  }
+  Future<Either<Result<String>, ApiError>> updateUser(Map<String, dynamic> data,) async {
+    return execute<String>(
+      apiCall: () => _api.putApi('/app/users/update',data),
+      onSuccess: (response) {
+        // Parse user from response
+        final data = response['message'];
+        return data;
+      },
+      operationName: 'updateUser',
     );
   }
 

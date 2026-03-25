@@ -2,11 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kalyanboss/config/routes/route_names.dart';
 import 'package:kalyanboss/features/auth/presentation/pages/login_page.dart';
 import 'package:kalyanboss/features/auth/presentation/pages/verify_otp_screen.dart';
+import 'package:kalyanboss/features/base/presentation/bloc/base_bloc.dart';
 import 'package:kalyanboss/features/base/presentation/pages/base_screen.dart';
+import 'package:kalyanboss/features/betting/presentation/bloc/unified_game_bloc.dart';
+import 'package:kalyanboss/features/betting/presentation/screens/universal_bet_screen.dart';
+import 'package:kalyanboss/features/game/presentation/bloc/game_bloc.dart';
+import 'package:kalyanboss/features/game/presentation/screens/chart.dart';
+import 'package:kalyanboss/features/game/presentation/screens/game_list.dart';
 import 'package:kalyanboss/features/game/presentation/screens/game_screen.dart';
 
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
@@ -72,9 +79,88 @@ class AppRouter {
         pageBuilder: (context, state) => _withTransition(state, const GameScreen()),
       ),
       GoRoute(
+        path: RouteNames.gameList,
+        name: RouteNames.gameList,
+        pageBuilder: (context, state) {
+          // 1. Extract arguments safely from state.extra
+          final args = state.extra as Map<String, dynamic>? ?? {};
+
+          // 2. Wrap the screen with BlocProvider using Service Locator (sl)
+          return _withTransition(
+            state,
+            BlocProvider<GameBloc>(
+              // sl<GameBloc>() automatically handles UseCases & SessionManager injection
+              create: (context) => sl<GameBloc>(),
+              child: GameList(
+                market: args['market'],
+              ),
+            ),
+          );
+        },
+      ),
+
+      GoRoute(
+        path: RouteNames.chartScreen,
+        name: RouteNames.chartScreen,
+        pageBuilder: (context, state) {
+          // 1. Extract arguments safely from state.extra
+          final args = state.extra as Map<String, dynamic>? ?? {};
+
+          final marketId = args['marketId'];
+          final marketName = args['marketName'];
+          // 2. Wrap the screen with BlocProvider using Service Locator (sl)
+          return _withTransition(
+            state,
+            BlocProvider<GameBloc>(
+              // sl<GameBloc>() automatically handles UseCases & SessionManager injection
+              create: (context) => sl<GameBloc>(),
+              child: ChartScreen(
+                marketId: marketId,
+                marketName: marketName,
+              ),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.unifiedGameScreen,
+        name: RouteNames.unifiedGameScreen,
+        pageBuilder: (context, state) {
+          // 1. Extract arguments safely from state.extra
+          final args = state.extra as Map<String, dynamic>? ?? {};
+
+          final betArgs = BetScreenArgs(gameMode: args['gameMode'], marketId: args['marketId'], userId: args['userId']);
+          // 2. Wrap the screen with BlocProvider using Service Locator (sl)
+          return _withTransition(
+            state,
+            BlocProvider<UnifiedGameBloc>(
+              // sl<GameBloc>() automatically handles UseCases & SessionManager injection
+              create: (context) => sl<UnifiedGameBloc>(),
+              child: UniversalBetScreen(args: betArgs,),
+            ),
+          );
+        },
+      ),
+
+      GoRoute(
         path: RouteNames.home,
         name: RouteNames.home,
-        pageBuilder: (context, state) => _withTransition(state, const BaseScreen()),
+        pageBuilder: (context, state) => _withTransition(
+          state,
+          MultiBlocProvider(
+            providers: [
+              // Provides tab switching logic
+              BlocProvider<BaseBloc>(
+                create: (context) => sl<BaseBloc>(),
+              ),
+              // Provides market data logic only to this section of the app
+              BlocProvider<GameBloc>(
+                create: (context) => sl<GameBloc>(),
+              ),
+            ],
+            child: const BaseScreen(),
+          ),
+        ),
       ),
     ],
     redirect: _authRedirect,

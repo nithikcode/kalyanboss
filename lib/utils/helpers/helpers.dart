@@ -106,7 +106,7 @@ void createLog(dynamic message) {
   }
 
   // --- Define a title and line prefix ---
-  const String logTitle = "[Nithik's App Log]";
+  const String logTitle = "[ App Log]";
   const String linePrefix = "│ "; // Box-drawing character
 
   // --- Define borders (you can change the length) ---

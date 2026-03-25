@@ -34,8 +34,14 @@ class VerifyEvent extends AuthEvent {
 
   VerifyEvent({required this.mobile, required this.otp});
 }
+class UpdateUserEvent extends AuthEvent {
+  final String? fcm;
+  final String? fullName;
 
+  UpdateUserEvent({required this.fcm, required this.fullName});
+}
 class FetchProfileEvent extends AuthEvent {}
+class FetchSettingEvent extends AuthEvent {}
 class LogoutEvent extends AuthEvent {}
 
 class ResetLoginStateEvent extends AuthEvent {}

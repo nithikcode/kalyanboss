@@ -1,12 +1,10 @@
 
 class AppUrl {
   // static const String url = "http://10.0.10.151:7002"; // LOCAL Pushpendra
-  // static const String url = "http://10.5.1.150:7001"; // LOCAL Daksh
-  static const String url = 'http://192.168.0.21:2552';  // live Api v1
+  // static const String url = "http://183.83.55.92:5010"; // LOCAL Daksh
+  static const String url = "https://server.lbgroupgames.com"; // LOCAL Daksh
+  // static const String url = 'http://192.168.0.21:2552';  // live Api v1
   static const String baseUrl = '$url/api/v1';
-  // static const String php = 'http://10.0.10.226/woodenstreet-web/index.php?route=api/api_flutter29';  // LOCAL Himanshu PHP
-  static const String php = 'https://beta.woodenstreet.com/index.php?route=api/api_flutter_node';  // live php beta PHP
-// static const String php = 'http://10.4.1.9/testws/index.php?route=api/api_flutter29';  // testing PHP
 }
 
 class AppLogos {
@@ -17,20 +15,7 @@ class AppLogos {
 
 class AppStrings {
   // --- API dependent, mutable (will be updated after first API call) ---
-  // static String base_Images = "https://images.woodenstreet.de/image/";
-  // static String base_Images_Static = "https://d2emch4msrhe87.cloudfront.net/wsnew2024/static-webmedia";
-  static String baseImages = "https://images.woodenstreet.de/image/";
-  static String baseImagesStatic = "https://d2emch4msrhe87.cloudfront.net/wsnew2024/static-webmedia";
-  static String bannerUrl = "$baseImagesStatic/images/offer/mobile-mid-banner.jpg";
-  static String whatsAppNumber = "919660096011";
-  static String wsNumber = "9314444747";
-  static String appUpdate = "A new Update is Available";
-  static String storeWhatsAppMessage = "Share Google Maps link for WoodenStreet,";
-  static String couponCode = "WEDDING25";
-  static String storeOfferText = "";
-  static String defaultWhatsAppMessage = "Hi, I would like to discuss about the furniture and other details. Kindly assist!";
-  static String url = 'https://woodenstreet.com';
-  static String showDeleteAccountButton = 'false';
+
   static String appName = 'KalyanBoss';
 
 

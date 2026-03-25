@@ -64,6 +64,7 @@ dependencies:
   url_launcher: ^6.3.1
   connectivity_plus: ^7.0.0 # internet
   fluttertoast: ^8.0.7
+  marquee: ^2.2.3
 
 
 

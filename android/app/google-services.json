@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "861490888551",
+    "project_id": "kalyanboss-e0b25",
+    "storage_bucket": "kalyanboss-e0b25.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:861490888551:android:69024bece9490c2130b9c2",
+        "android_client_info": {
+          "package_name": "com.kalyan.quizapp.kalyanboss"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_N5S8d_hroQrLZ5ezI9llvo1eAEbsZy8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
