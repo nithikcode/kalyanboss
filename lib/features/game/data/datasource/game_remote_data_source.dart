@@ -1,9 +1,10 @@
 import 'package:dartz/dartz.dart';
 import 'package:kalyanboss/features/base/data/datasource/base_remote_data_source.dart';
+import 'package:kalyanboss/features/game/data/model/bet_history_model.dart';
 import 'package:kalyanboss/features/game/data/model/game_mode_model.dart';
 import 'package:kalyanboss/features/game/data/model/market_model.dart';
 import 'package:kalyanboss/features/game/data/model/result_model.dart';
-import 'package:kalyanboss/features/game/domain/entity/result_entity.dart' as result;
+import 'package:kalyanboss/features/game/data/model/transaction_model.dart';
 import 'package:kalyanboss/utils/api/api_error.dart';
 import 'package:kalyanboss/utils/api/api_result.dart';
 import 'package:kalyanboss/utils/network/network_api_service.dart';
@@ -19,7 +20,7 @@ class GameRemoteDataSource extends BaseRemoteDataSource {
       Map<String, dynamic> data,
       ) async {
     return execute<MarketResponseModel>(
-      apiCall: () => _api.getApi('/app/market/all'),
+      apiCall: () => _api.getApi('/app/market/all', queryParameters: data),
       onSuccess: (response) {
         // Parse user from response
         final data = MarketResponseModel.fromJson(response);
@@ -57,6 +58,36 @@ class GameRemoteDataSource extends BaseRemoteDataSource {
         return data;
       },
       operationName: 'fetchResult',
+    );
+  }
+
+  /// fetch - betHistory
+  Future<Either<Result<BetResponseModel>, ApiError>> betHistory(
+      Map<String, dynamic> data,
+      ) async {
+    return execute<BetResponseModel>(
+      apiCall: () => _api.getApi('/app/bet/get',queryParameters: data),
+      onSuccess: (response) {
+        // Parse user from response
+        final data = BetResponseModel.fromJson(response);
+        return data;
+      },
+      operationName: 'betHistory',
+    );
+  }
+
+  /// fetch - transactionHistory
+  Future<Either<Result<TransactionModel>, ApiError>> transactionHistory(
+      Map<String, dynamic> data,
+      ) async {
+    return execute<TransactionModel>(
+      apiCall: () => _api.getApi('/app/transaction/get',queryParameters: data),
+      onSuccess: (response) {
+        // Parse user from response
+        final data = TransactionModel.fromJson(response);
+        return data;
+      },
+      operationName: 'transactionHistory',
     );
   }
 }

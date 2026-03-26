@@ -77,6 +77,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: BlocConsumer<AuthBloc, AuthState>(
                 listener: (context, state) {
+                  context.pushNamed(RouteNames.home);
                   // Navigation handled by GoRouter redirect logic
                 },
                 builder: (context, state) {

@@ -1,78 +1,128 @@
 import 'package:equatable/equatable.dart';
 import 'package:kalyanboss/features/betting/domain/entity/betting_entity.dart';
 import 'package:kalyanboss/features/game/domain/entity/game_mode_entity.dart';
+import 'package:kalyanboss/features/game/domain/entity/market_entity.dart';
+import 'package:kalyanboss/utils/bloc/local_state.dart';
 import '../../config/game_type_config.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Base
+// Top-level state class — a single, flat object (no sealed hierarchy needed).
+//
+// The [gameState] field uses [LocalState] to express the lifecycle:
+//   • initial  → screen not yet initialised
+//   • loading  → init in progress
+//   • success  → ready to play, carries [GameReadyData]
+//   • error    → non-recoverable init failure
+//   • refreshing → re-init while stale data is still shown
+//
+// Transient feedback (validation errors, submit result) is carried by the
+// [feedback] field so the BlocBuilder never has to rebuild for them.
 // ─────────────────────────────────────────────────────────────────────────────
-abstract class UnifiedGameState extends Equatable {
-  const UnifiedGameState();
+class UnifiedGameState extends Equatable {
+  /// Core lifecycle state for the game session.
+  final LocalState<GameReadyData> gameState;
+
+  /// Short-lived feedback shown via BlocListener (snackbars, toasts).
+  /// Always set back to null after the listener has consumed it.
+  final GameFeedback? feedback;
+
+  const UnifiedGameState({
+    required this.gameState,
+    this.feedback,
+  });
+
+  // ── Factory constructors (named, for readability at call sites) ───────────
+
+  const UnifiedGameState.initial()
+      : gameState = const LocalState.initial(),
+        feedback = null;
+
+  // ── copyWith ─────────────────────────────────────────────────────────────────
+
+  UnifiedGameState copyWith({
+    LocalState<GameReadyData>? gameState,
+    // Use an explicit sentinel so callers can set feedback to null.
+    Object? feedback = _sentinel,
+  }) {
+    return UnifiedGameState(
+      gameState: gameState ?? this.gameState,
+      feedback: identical(feedback, _sentinel)
+          ? this.feedback
+          : feedback as GameFeedback?,
+    );
+  }
 
   @override
-  List<Object?> get props => [];
+  List<Object?> get props => [gameState, feedback];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Loading — shown while settings are being read on screen open
-// ─────────────────────────────────────────────────────────────────────────────
-class GameLoadingState extends UnifiedGameState {
-  const GameLoadingState();
-}
+// Sentinel object so copyWith can distinguish "not passed" from "null".
+const _sentinel = Object();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Ready — the primary working state that owns the cart and settings
+// GameReadyData — the payload inside LocalState.success(...)
 // ─────────────────────────────────────────────────────────────────────────────
-class GameReadyState extends UnifiedGameState {
+class GameReadyData extends Equatable {
   final GameModeEntity gameMode;
   final GameTypeConfig config;
   final BetSettings settings;
   final List<BetEntry> cart;
   final String currentSession; // "OPEN" | "CLOSE"
   final String userId;
-  final String marketId;
+  final MarketEntity market;
 
-  /// True while a submit network call is in-flight. Used to show a spinner
-  /// inside the submit button and disable it to prevent double-tap.
+  /// True when the market's open time has already passed today.
+  /// When true, the OPEN session button is locked and currentSession is
+  /// forced to "CLOSE" for games that support both sessions.
+  final bool isOpenLocked;
+
+  /// True while a submit network call is in-flight.
   final bool isSubmitting;
 
-  const GameReadyState({
+  const GameReadyData({
     required this.gameMode,
     required this.config,
     required this.settings,
     required this.cart,
     required this.currentSession,
     required this.userId,
-    required this.marketId,
+    required this.market,
+    required this.isOpenLocked,
     this.isSubmitting = false,
   });
 
-  // ── Derived ─────────────────────────────────────────────────────────────────
+  // ── Convenience ──────────────────────────────────────────────────────────────
+
+  String get marketId => market.id;
+
+  // ── Derived ──────────────────────────────────────────────────────────────────
 
   int get totalPoints => cart.fold(0, (sum, e) => sum + e.points);
   int get remainingBalance => settings.walletBalance - totalPoints;
   bool get canSubmit => cart.isNotEmpty && remainingBalance >= 0;
 
-  // ── copyWith ────────────────────────────────────────────────────────────────
+  // ── copyWith ─────────────────────────────────────────────────────────────────
 
-  GameReadyState copyWith({
+  GameReadyData copyWith({
     GameModeEntity? gameMode,
     GameTypeConfig? config,
     BetSettings? settings,
     List<BetEntry>? cart,
     String? currentSession,
     String? userId,
-    String? marketId,
+    MarketEntity? market,
+    bool? isOpenLocked,
     bool? isSubmitting,
   }) =>
-      GameReadyState(
+      GameReadyData(
         gameMode: gameMode ?? this.gameMode,
         config: config ?? this.config,
         settings: settings ?? this.settings,
         cart: cart ?? this.cart,
         currentSession: currentSession ?? this.currentSession,
         userId: userId ?? this.userId,
-        marketId: marketId ?? this.marketId,
+        market: market ?? this.market,
+        isOpenLocked: isOpenLocked ?? this.isOpenLocked,
         isSubmitting: isSubmitting ?? this.isSubmitting,
       );
 
@@ -84,59 +134,32 @@ class GameReadyState extends UnifiedGameState {
     cart,
     currentSession,
     userId,
-    marketId,
+    market,
+    isOpenLocked,
     isSubmitting,
   ];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Transient feedback states — handled exclusively via BlocListener.
-// The BlocBuilder always uses buildWhen to skip these so the UI never blanks.
+// GameFeedback — transient messages consumed exclusively by BlocListener.
 // ─────────────────────────────────────────────────────────────────────────────
+enum FeedbackType { validationError, submitSuccess, submitFailure }
 
-/// Emitted when user input fails validation. Always followed by the previous
-/// [GameReadyState] so the UI reverts without any visible flicker.
-class GameValidationErrorState extends UnifiedGameState {
+class GameFeedback extends Equatable {
+  final FeedbackType type;
   final String message;
+  final int? betsCount; // only relevant for submitSuccess
 
-  const GameValidationErrorState(this.message);
-
-  @override
-  List<Object?> get props => [message];
-}
-
-/// Emitted once after a successful bet submission. Always followed by a fresh
-/// [GameReadyState] with an empty cart.
-class GameSubmitSuccessState extends UnifiedGameState {
-  final String message;
-  final int betsCount;
-
-  const GameSubmitSuccessState({
+  const GameFeedback({
+    required this.type,
     required this.message,
-    required this.betsCount,
+    this.betsCount,
   });
 
-  @override
-  List<Object?> get props => [message, betsCount];
-}
-
-/// Emitted once when the submit network call fails. Always followed by the
-/// previous [GameReadyState] so the user can retry.
-class GameSubmitFailureState extends UnifiedGameState {
-  final String message;
-
-  const GameSubmitFailureState(this.message);
+  bool get isError =>
+      type == FeedbackType.validationError ||
+          type == FeedbackType.submitFailure;
 
   @override
-  List<Object?> get props => [message];
-}
-
-/// Emitted when a non-recoverable error occurs (e.g. init failure).
-class GameErrorState extends UnifiedGameState {
-  final String message;
-
-  const GameErrorState(this.message);
-
-  @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [type, message, betsCount];
 }

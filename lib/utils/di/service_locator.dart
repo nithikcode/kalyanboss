@@ -19,11 +19,14 @@ import 'package:kalyanboss/features/betting/data/repositoryimpl/betting_reposito
 import 'package:kalyanboss/features/betting/domain/usecases/betting_use_cases.dart';
 import 'package:kalyanboss/features/betting/domain/usecases/submit_bet_use_case.dart';
 import 'package:kalyanboss/features/betting/presentation/bloc/unified_game_bloc.dart';
+import 'package:kalyanboss/features/gali_desawar/presentation/bloc/gali_desawar_game_bloc.dart';
 import 'package:kalyanboss/features/game/data/datasource/game_remote_data_source.dart';
 import 'package:kalyanboss/features/game/data/repository/game_screen_repository_impl.dart';
 import 'package:kalyanboss/features/game/domain/usecases/fetch_all_market_use_case.dart';
+import 'package:kalyanboss/features/game/domain/usecases/fetch_bet_history_use_case.dart';
 import 'package:kalyanboss/features/game/domain/usecases/fetch_game_modes_use_case.dart';
 import 'package:kalyanboss/features/game/domain/usecases/fetch_market_result_use_case.dart';
+import 'package:kalyanboss/features/game/domain/usecases/fetch_transaction_use_case.dart';
 import 'package:kalyanboss/features/game/domain/usecases/game_screen_use_cases.dart';
 import 'package:kalyanboss/features/game/presentation/bloc/game_bloc.dart';
 import 'package:kalyanboss/services/connection_manager.dart';
@@ -107,7 +110,9 @@ Future<void> init() async {
   sl.registerLazySingleton(() => FetchAllMarketUseCase(gameScreenRepository: sl<GameScreenRepositoryImpl>()));
   sl.registerLazySingleton(() => FetchGameModesUseCase(gameScreenRepository: sl<GameScreenRepositoryImpl>()));
   sl.registerLazySingleton(() => FetchMarketResultUseCase(gameScreenRepository: sl<GameScreenRepositoryImpl>()));
-  sl.registerLazySingleton(() => GameScreenUseCases( fetchAllMarketUseCase: sl<FetchAllMarketUseCase>(), fetchGameModesUseCase: sl<FetchGameModesUseCase>(), fetchMarketResultUseCase: sl<FetchMarketResultUseCase>()));
+  sl.registerLazySingleton(() => FetchBetHistoryUseCase(gameScreenRepository: sl<GameScreenRepositoryImpl>()));
+  sl.registerLazySingleton(() => FetchTransactionUseCase(gameScreenRepository: sl<GameScreenRepositoryImpl>()));
+  sl.registerLazySingleton(() => GameScreenUseCases( fetchAllMarketUseCase: sl<FetchAllMarketUseCase>(), fetchGameModesUseCase: sl<FetchGameModesUseCase>(), fetchMarketResultUseCase: sl<FetchMarketResultUseCase>(), fetchBetHistoryUseCase: sl<FetchBetHistoryUseCase>(), fetchTransactionUseCase: sl<FetchTransactionUseCase>()));
 
   sl.registerFactory(() => GameBloc(
     gameScreenUseCases: sl(),
@@ -124,6 +129,18 @@ Future<void> init() async {
   sl.registerLazySingleton(() => BettingUseCases(submitBetUseCase: sl<SubmitBetUseCase>()));
 
   sl.registerFactory(() => UnifiedGameBloc(
+ bettingUseCases: sl(), authBloc: sl()
+  ));
+
+  // ============================================================================
+  // Unified Game FEATURE
+  // ============================================================================
+  // sl.registerLazySingleton(() => BettingRemoteDataSource(api: sl<NetworkServicesApi>()));
+  // sl.registerLazySingleton(() => BettingRepositoryImpl(bettingRemoteDataSource: sl<BettingRemoteDataSource>()));
+  // sl.registerLazySingleton(() => SubmitBetUseCase(bettingRepository: sl<BettingRepositoryImpl>()));
+  // sl.registerLazySingleton(() => BettingUseCases(submitBetUseCase: sl<SubmitBetUseCase>()));
+
+  sl.registerFactory(() => GaliDesawarGameBloc(
  bettingUseCases: sl(), authBloc: sl()
   ));
 

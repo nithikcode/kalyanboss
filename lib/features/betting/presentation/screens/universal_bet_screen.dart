@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kalyanboss/config/constants.dart';
 import 'package:kalyanboss/features/betting/config/game_type_config.dart';
 import 'package:kalyanboss/features/betting/presentation/bloc/unified_game_bloc.dart';
 import 'package:kalyanboss/features/betting/presentation/bloc/unified_game_event.dart';
@@ -8,18 +10,19 @@ import 'package:kalyanboss/features/betting/presentation/bloc/unified_game_state
 import 'package:kalyanboss/features/betting/presentation/widgets/bet_cart_widget.dart';
 import 'package:kalyanboss/features/betting/presentation/widgets/input_strategy_widgets.dart';
 import 'package:kalyanboss/features/game/domain/entity/game_mode_entity.dart';
+import 'package:kalyanboss/features/game/domain/entity/market_entity.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Route arguments
 // ─────────────────────────────────────────────────────────────────────────────
 class BetScreenArgs {
   final GameModeEntity gameMode;
-  final String marketId;
+  final MarketEntity market;
   final String userId;
 
   const BetScreenArgs({
     required this.gameMode,
-    required this.marketId,
+    required this.market,
     required this.userId,
   });
 }
@@ -46,25 +49,24 @@ class _UniversalBetScreenState extends State<UniversalBetScreen> {
       if (!mounted) return;
       context.read<UnifiedGameBloc>().add(InitGameEvent(
         gameMode: widget.args.gameMode,
-        marketId: widget.args.marketId,
+        market: widget.args.market,
         userId: widget.args.userId,
       ));
     });
   }
 
-  // ── Listener ────────────────────────────────────────────────────────────────
+  // ── Listener ─────────────────────────────────────────────────────────────────
 
   void _handleStateChange(BuildContext ctx, UnifiedGameState state) {
-    if (state is GameValidationErrorState) {
-      _showSnack(ctx, state.message, isError: true);
-    } else if (state is GameSubmitSuccessState) {
-      _showSnack(ctx, state.message, isError: false);
-      // Pop back to game list with a success signal so it can refresh.
+    final feedback = state.feedback;
+    if (feedback == null) return;
+
+    _showSnack(ctx, feedback.message, isError: feedback.isError);
+
+    if (feedback.type == FeedbackType.submitSuccess) {
       Future.microtask(() {
         if (mounted) ctx.pop(true);
       });
-    } else if (state is GameSubmitFailureState) {
-      _showSnack(ctx, state.message, isError: true);
     }
   }
 
@@ -82,54 +84,41 @@ class _UniversalBetScreenState extends State<UniversalBetScreen> {
       );
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
+  // ── Build ─────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return BlocListener<UnifiedGameBloc, UnifiedGameState>(
-      // Only listen to transient notification states — never to GameReadyState
-      // or GameLoadingState, which are handled by the BlocBuilder below.
-      listenWhen: (_, curr) =>
-      curr is GameValidationErrorState ||
-          curr is GameSubmitSuccessState ||
-          curr is GameSubmitFailureState,
+      // Only fire the listener when a non-null feedback object arrives.
+      listenWhen: (previous, current) =>
+      current.feedback != null && current.feedback != previous.feedback,
       listener: _handleStateChange,
       child: Scaffold(
         appBar: _buildAppBar(context),
         body: BlocBuilder<UnifiedGameBloc, UnifiedGameState>(
-          // ─────────────────────────────────────────────────────────────────
-          // KEY FIX: Only rebuild the body for persistent UI states.
-          // Transient states (validation errors, submit success/failure) are
-          // handled entirely by the BlocListener above and must NOT cause a
-          // rebuild here — otherwise the UI can blank out momentarily.
-          // ─────────────────────────────────────────────────────────────────
+          // Rebuild the body only when the gameState changes — the [feedback]
+          // field is handled exclusively by the listener above so it never
+          // causes a body rebuild / blank-out.
           buildWhen: (previous, current) =>
-          current is GameLoadingState ||
-              current is GameReadyState ||
-              current is GameErrorState,
+          current.gameState != previous.gameState,
           builder: (ctx, state) {
-            if (state is GameLoadingState) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            if (state is GameErrorState) {
-              return _ErrorView(
-                message: state.message,
-                onRetry: () =>
-                    ctx.read<UnifiedGameBloc>().add(InitGameEvent(
-                      gameMode: widget.args.gameMode,
-                      marketId: widget.args.marketId,
-                      userId: widget.args.userId,
-                    )),
-              );
-            }
-
-            if (state is GameReadyState) {
-              return _ReadyBody(state: state);
-            }
-
-            // Fallback — should never be reached with the buildWhen above.
-            return const Center(child: CircularProgressIndicator());
+            return state.gameState.when(
+              initial: () =>
+              const Center(child: CircularProgressIndicator()),
+              loading: () =>
+              const Center(child: CircularProgressIndicator()),
+              refreshing: (_) =>
+              const Center(child: CircularProgressIndicator()),
+              success: (data) => _ReadyBody(data: data),
+              error: (message, _) => _ErrorView(
+                message: message,
+                onRetry: () => ctx.read<UnifiedGameBloc>().add(InitGameEvent(
+                  gameMode: widget.args.gameMode,
+                  market: widget.args.market,
+                  userId: widget.args.userId,
+                )),
+              ),
+            );
           },
         ),
       ),
@@ -139,28 +128,26 @@ class _UniversalBetScreenState extends State<UniversalBetScreen> {
   AppBar _buildAppBar(BuildContext context) {
     return AppBar(
       title: BlocBuilder<UnifiedGameBloc, UnifiedGameState>(
-        buildWhen: (_, curr) =>
-        curr is GameReadyState || curr is GameLoadingState,
+        buildWhen: (previous, current) =>
+        current.gameState != previous.gameState,
         builder: (_, state) {
-          final name = state is GameReadyState
-              ? state.gameMode.name
-              : widget.args.gameMode.name;
-          return Text(
-            name,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          );
+          final name = state.gameState.whenOrNull(success: (d) => d.gameMode.name)
+              ?? widget.args.gameMode.name;
+          return Text(name, style: const TextStyle(fontWeight: FontWeight.bold));
         },
       ),
       actions: [
         BlocBuilder<UnifiedGameBloc, UnifiedGameState>(
-          buildWhen: (_, curr) => curr is GameReadyState,
+          buildWhen: (previous, current) =>
+          current.gameState != previous.gameState,
           builder: (_, state) {
-            if (state is! GameReadyState) return const SizedBox.shrink();
+            final data = state.gameState.dataOrNull;
+            if (data == null) return const SizedBox.shrink();
             return Padding(
               padding: const EdgeInsets.only(right: 16),
               child: Chip(
-                avatar: const Icon(Icons.account_balance_wallet, size: 16),
-                label: Text('₹${state.settings.walletBalance}'),
+                avatar: SvgPicture.asset(AppLogos.wallet),
+                label: Text('₹${data.settings.walletBalance}'),
                 visualDensity: VisualDensity.compact,
               ),
             );
@@ -175,9 +162,9 @@ class _UniversalBetScreenState extends State<UniversalBetScreen> {
 // Ready body
 // ─────────────────────────────────────────────────────────────────────────────
 class _ReadyBody extends StatelessWidget {
-  final GameReadyState state;
+  final GameReadyData data;
 
-  const _ReadyBody({required this.state});
+  const _ReadyBody({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -191,8 +178,9 @@ class _ReadyBody extends StatelessWidget {
               children: [
                 // Session toggle (hidden for open-only games)
                 _SessionSelector(
-                  config: state.config,
-                  current: state.currentSession,
+                  config: data.config,
+                  current: data.currentSession,
+                  isOpenLocked: data.isOpenLocked,
                 ),
                 const SizedBox(height: 16),
 
@@ -213,7 +201,7 @@ class _ReadyBody extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          state.config.hint,
+                          data.config.hint,
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
@@ -223,17 +211,10 @@ class _ReadyBody extends StatelessWidget {
                 const SizedBox(height: 20),
 
                 // Input widget chosen by game type
-                _InputStrategySwitch(style: state.config.inputStyle),
+                _InputStrategySwitch(style: data.config.inputStyle),
                 const SizedBox(height: 24),
 
-                // Cart header
-                Text(
-                  'Cart',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
+
                 const BetCartWidget(),
               ],
             ),
@@ -241,7 +222,7 @@ class _ReadyBody extends StatelessWidget {
         ),
 
         // Sticky submit button
-        _SubmitBar(state: state),
+        _SubmitBar(data: data),
       ],
     );
   }
@@ -253,28 +234,58 @@ class _ReadyBody extends StatelessWidget {
 class _SessionSelector extends StatelessWidget {
   final GameTypeConfig config;
   final String current;
+  final bool isOpenLocked;
 
-  const _SessionSelector({required this.config, required this.current});
+  const _SessionSelector({
+    required this.config,
+    required this.current,
+    required this.isOpenLocked,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (config.sessionType == SessionType.open) {
       return const SizedBox.shrink();
     }
-    return SegmentedButton<String>(
-      segments: const [
-        ButtonSegment(
-            value: 'OPEN',
-            label: Text('Open'),
-            icon: Icon(Icons.lock_open)),
-        ButtonSegment(
-            value: 'CLOSE',
-            label: Text('Close'),
-            icon: Icon(Icons.lock)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SegmentedButton<String>(
+          segments: [
+            ButtonSegment(
+              value: 'OPEN',
+              label: Text(isOpenLocked ? 'Open (closed)' : 'Open'),
+              icon: SvgPicture.asset(isOpenLocked ? AppLogos.lock : AppLogos.unlock),
+              enabled: !isOpenLocked,
+            ),
+            ButtonSegment(
+              value: 'CLOSE',
+              label: const Text('Close'),
+              icon: SvgPicture.asset( AppLogos.lock),
+            ),
+          ],
+          selected: {current},
+          onSelectionChanged: (s) =>
+              context.read<UnifiedGameBloc>().add(UpdateSessionEvent(s.first)),
+        ),
+        if (isOpenLocked) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(Icons.info_outline,
+                  size: 14,
+                  color: Theme.of(context).colorScheme.error),
+              const SizedBox(width: 6),
+              Text(
+                'Open session has closed for this market.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
-      selected: {current},
-      onSelectionChanged: (s) =>
-          context.read<UnifiedGameBloc>().add(UpdateSessionEvent(s.first)),
     );
   }
 }
@@ -303,14 +314,13 @@ class _InputStrategySwitch extends StatelessWidget {
 // Submit bar (sticky bottom)
 // ─────────────────────────────────────────────────────────────────────────────
 class _SubmitBar extends StatelessWidget {
-  final GameReadyState state;
+  final GameReadyData data;
 
-  const _SubmitBar({required this.state});
+  const _SubmitBar({required this.data});
 
   @override
   Widget build(BuildContext context) {
-    final isSubmitting = state.isSubmitting;
-    final canSubmit = state.canSubmit && !isSubmitting;
+    final canSubmit = data.canSubmit && !data.isSubmitting;
 
     return SafeArea(
       child: Padding(
@@ -333,7 +343,7 @@ class _SubmitBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: isSubmitting
+            child: data.isSubmitting
                 ? const SizedBox(
               height: 22,
               width: 22,
@@ -341,11 +351,11 @@ class _SubmitBar extends StatelessWidget {
                   strokeWidth: 2, color: Colors.white),
             )
                 : Text(
-              state.cart.isEmpty
+              data.cart.isEmpty
                   ? 'Add bets to submit'
-                  : 'Submit ${state.cart.length} '
-                  'Bet${state.cart.length > 1 ? 's' : ''}'
-                  ' · ₹${state.totalPoints}',
+                  : 'Submit ${data.cart.length} '
+                  'Bet${data.cart.length > 1 ? 's' : ''}'
+                  ' · ₹${data.totalPoints}',
               style: const TextStyle(
                   fontSize: 16, fontWeight: FontWeight.bold),
             ),

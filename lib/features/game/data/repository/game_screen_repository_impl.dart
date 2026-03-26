@@ -1,9 +1,12 @@
 import 'package:dartz/dartz.dart';
 import 'package:kalyanboss/features/game/data/datasource/game_remote_data_source.dart';
 import 'package:kalyanboss/features/game/data/model/market_model.dart';
+import 'package:kalyanboss/features/game/data/model/transaction_model.dart';
+import 'package:kalyanboss/features/game/domain/entity/bet_history_entity.dart';
 import 'package:kalyanboss/features/game/domain/entity/game_mode_entity.dart';
 import 'package:kalyanboss/features/game/domain/entity/market_entity.dart' show MarketEntity, MarketResponseMapping, MarketResponseEntity;
 import 'package:kalyanboss/features/game/domain/entity/result_entity.dart';
+import 'package:kalyanboss/features/game/domain/entity/transaction_entity.dart';
 import 'package:kalyanboss/features/game/domain/repository/game_screen_repository.dart';
 import 'package:kalyanboss/utils/api/api_error.dart';
 import 'package:kalyanboss/utils/api/api_result.dart';
@@ -59,6 +62,42 @@ class GameScreenRepositoryImpl extends GameScreenRepository {
         } else {
           return Right(
             ApiError(message: success.data?.status ?? "Fetch Game Modes Request failed"),
+          );
+        }
+      },
+          (error) => Right(ApiError(message: error.message)),
+    );
+  }
+
+  @override
+  Future<Either<Result<BetResponseEntity>, ApiError>> betHistory(Map<String, dynamic> data) async {
+    final res = await gameRemoteDataSource.betHistory(data);
+    return res.fold(
+          (success) {
+        if (success.isSuccess && success.data != null) {
+          final result = success.data?.toEntity();
+          return Left(Result.success(result));
+        } else {
+          return Right(
+            ApiError(message: success.data?.status ?? "Fetch bet history Request failed"),
+          );
+        }
+      },
+          (error) => Right(ApiError(message: error.message)),
+    );
+  }
+
+  @override
+  Future<Either<Result<TransactionEntity>, ApiError>> transactionHistory(Map<String, dynamic> data) async {
+    final res = await gameRemoteDataSource.transactionHistory(data);
+    return res.fold(
+          (success) {
+        if (success.isSuccess && success.data != null) {
+          final result = success.data?.toEntity();
+          return Left(Result.success(result));
+        } else {
+          return Right(
+            ApiError(message: success.data?.status ?? "Fetch bet history Request failed"),
           );
         }
       },

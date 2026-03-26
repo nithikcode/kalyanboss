@@ -10,6 +10,7 @@ import 'package:kalyanboss/features/betting/presentation/bloc/unified_game_event
 import 'package:kalyanboss/features/betting/presentation/bloc/unified_game_state.dart';
 import 'package:kalyanboss/features/betting/utils/panna_validator.dart';
 import 'package:kalyanboss/services/session_manager.dart';
+import 'package:kalyanboss/utils/bloc/local_state.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UnifiedGameBloc
@@ -18,21 +19,15 @@ class UnifiedGameBloc extends Bloc<UnifiedGameEvent, UnifiedGameState> {
   final BettingUseCases bettingUseCases;
   final AuthBloc _authBloc;
 
-  /// Tracks the last stable [GameReadyState] so transient states (validation
-  /// errors, submit success/failure) can always snap back to it without the
-  /// risk of emitting a null ready state.
-  GameReadyState? _lastReadyState;
-
   /// Listens to AuthBloc so wallet balance / bet limits stay in sync while
-  /// the screen is open — but ONLY updates existing ready state, never causes
-  /// a GoRouter refresh (that is handled by the filtered stream in routes.dart).
+  /// the screen is open.
   late final StreamSubscription<AuthState> _authSubscription;
 
   UnifiedGameBloc({
     required this.bettingUseCases,
     required AuthBloc authBloc,
   })  : _authBloc = authBloc,
-        super(const GameLoadingState()) {
+        super(const UnifiedGameState.initial()) {
     _authSubscription = _authBloc.stream.listen((authState) {
       add(_SyncAuthSettingsEvent(authState));
     });
@@ -48,18 +43,11 @@ class UnifiedGameBloc extends Bloc<UnifiedGameEvent, UnifiedGameState> {
     on<_SyncAuthSettingsEvent>(_onSyncAuth);
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────────
 
-  /// Returns the current ready state OR the last cached one. Never null after
-  /// a successful init — callers still guard with early return when null.
-  GameReadyState? get _ready {
-    if (state is GameReadyState) {
-      _lastReadyState = state as GameReadyState;
-      return _lastReadyState;
-    }
-    // Return cached ready state so transient states don't lose context.
-    return _lastReadyState;
-  }
+  /// Extracts the [GameReadyData] from the current state, or null.
+  GameReadyData? get _ready =>
+      state.gameState.whenOrNull(success: (data) => data);
 
   String _newId() =>
       '${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(9999)}';
@@ -80,7 +68,7 @@ class UnifiedGameBloc extends Bloc<UnifiedGameEvent, UnifiedGameState> {
     );
   }
 
-  // ── Validation ──────────────────────────────────────────────────────────────
+  // ── Validation ───────────────────────────────────────────────────────────────
 
   String? _validatePoints(int points, BetSettings s) {
     if (points <= 0) return 'Points must be greater than 0';
@@ -160,13 +148,38 @@ class UnifiedGameBloc extends Bloc<UnifiedGameEvent, UnifiedGameState> {
     _ => 'Panna',
   };
 
-  String? _validateBalance(int additionalPoints, GameReadyState ready) {
-    final newTotal = ready.totalPoints + additionalPoints;
-    if (newTotal > ready.settings.walletBalance) {
-      return 'Insufficient balance — need ₹$additionalPoints, '
-          'available ₹${ready.remainingBalance}';
+  // ── Emit helpers ─────────────────────────────────────────────────────────────
+
+  /// Emit a transient feedback message, then immediately follow it with the
+  /// restored ready state so the BlocBuilder never blanks out.
+  void _emitFeedback(
+      Emitter<UnifiedGameState> emit,
+      GameFeedback feedback,
+      GameReadyData ready,
+      ) {
+    emit(state.copyWith(feedback: feedback));
+    emit(state.copyWith(
+      gameState: LocalState.success(ready),
+      feedback: null,
+    ));
+  }
+
+  // ── Session time helper ───────────────────────────────────────────────────────
+
+  /// Returns true when the market's open time (format "HH:mm") has already
+  /// passed relative to the current device time.
+  bool _isOpenTimePassed(String openTime) {
+    try {
+      final parts = openTime.split(':');
+      if (parts.length < 2) return false;
+      final hour = int.parse(parts[0]);
+      final minute = int.parse(parts[1]);
+      final now = DateTime.now();
+      final open = DateTime(now.year, now.month, now.day, hour, minute);
+      return now.isAfter(open);
+    } catch (_) {
+      return false;
     }
-    return null;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -175,59 +188,63 @@ class UnifiedGameBloc extends Bloc<UnifiedGameEvent, UnifiedGameState> {
 
   Future<void> _onInit(
       InitGameEvent event, Emitter<UnifiedGameState> emit) async {
-    emit(const GameLoadingState());
+    emit(state.copyWith(gameState: const LocalState.loading(), feedback: null));
     try {
       final settings = _settingsFromAuth(_authBloc.state);
       final config = GameTypeConfig.fromGameName(event.gameMode.name);
 
-      final readyState = GameReadyState(
+      final openLocked = _isOpenTimePassed(event.market.openTime);
+
+      // For open-only games the session is always "OPEN" regardless of time —
+      // the backend / game config controls whether open-only games even appear
+      // after open time. For dual-session games we force CLOSE when locked.
+      final initialSession =
+      (config.sessionType == SessionType.open || !openLocked)
+          ? 'OPEN'
+          : 'CLOSE';
+
+      final readyData = GameReadyData(
         gameMode: event.gameMode,
         config: config,
         settings: settings,
         cart: const [],
-        currentSession: 'OPEN',
+        currentSession: initialSession,
         userId: event.userId,
-        marketId: event.marketId,
+        market: event.market,
+        isOpenLocked: openLocked,
       );
 
-      // Cache immediately so transient states can always recover.
-      _lastReadyState = readyState;
-      emit(readyState);
+      emit(state.copyWith(gameState: LocalState.success(readyData)));
     } catch (e) {
-      emit(GameErrorState('Failed to initialise game: $e'));
+      emit(state.copyWith(
+          gameState: LocalState.error('Failed to initialise game: $e')));
     }
   }
 
   void _onSyncAuth(
       _SyncAuthSettingsEvent event, Emitter<UnifiedGameState> emit) {
-    // Use cached ready state — this fires even during transient states like
-    // GameSubmitSuccessState, so we must NOT use `state is GameReadyState`.
-    final ready = _lastReadyState;
+    final ready = _ready;
     if (ready == null) return;
 
     final freshSettings = _settingsFromAuth(event.authState);
     if (freshSettings == ready.settings) return;
 
-    final updated = ready.copyWith(settings: freshSettings);
-    _lastReadyState = updated;
-
-    // Only emit if current visible state is also GameReadyState to avoid
-    // clobbering a transient state that's being displayed right now.
-    if (state is GameReadyState) {
-      emit(updated);
-    }
+    emit(state.copyWith(
+        gameState: LocalState.success(ready.copyWith(settings: freshSettings))));
   }
 
   void _onUpdateSession(
       UpdateSessionEvent event, Emitter<UnifiedGameState> emit) {
     final ready = _ready;
     if (ready == null) return;
-    final updated = ready.copyWith(currentSession: event.session);
-    _lastReadyState = updated;
-    emit(updated);
+    // Silently reject an attempt to select OPEN when it is locked.
+    if (event.session == 'OPEN' && ready.isOpenLocked) return;
+    emit(state.copyWith(
+        gameState:
+        LocalState.success(ready.copyWith(currentSession: event.session))));
   }
 
-  // ── Single bet ──────────────────────────────────────────────────────────────
+  // ── Single bet ───────────────────────────────────────────────────────────────
 
   void _onAddSingle(
       AddSingleBetEvent event, Emitter<UnifiedGameState> emit) {
@@ -236,35 +253,37 @@ class UnifiedGameBloc extends Bloc<UnifiedGameEvent, UnifiedGameState> {
 
     final pointsError = _validatePoints(event.points, ready.settings);
     if (pointsError != null) {
-      emit(GameValidationErrorState(pointsError));
-      emit(ready); // always restore — _ready returns cached state
+      _emitFeedback(emit,
+          GameFeedback(type: FeedbackType.validationError, message: pointsError),
+          ready);
       return;
     }
 
     final openError = _validateOpenValue(event.openValue, ready.config);
     if (openError != null) {
-      emit(GameValidationErrorState(openError));
-      emit(ready);
+      _emitFeedback(emit,
+          GameFeedback(type: FeedbackType.validationError, message: openError),
+          ready);
       return;
     }
 
-    if (ready.config.inputStyle == InputStyle.sangamStyle) {
-      final closeError = _validateCloseValue(event.closeValue, ready.config);
-      if (closeError != null) {
-        emit(GameValidationErrorState(closeError));
-        emit(ready);
-        return;
-      }
-    }
-
-    final balError = _validateBalance(event.points, ready);
-    if (balError != null) {
-      emit(GameValidationErrorState(balError));
-      emit(ready);
+    final closeError = _validateCloseValue(event.closeValue, ready.config);
+    if (closeError != null) {
+      _emitFeedback(emit,
+          GameFeedback(type: FeedbackType.validationError, message: closeError),
+          ready);
       return;
     }
 
-    final bet = BetEntry(
+    final balanceError = _validateBalance(event.points, ready);
+    if (balanceError != null) {
+      _emitFeedback(emit,
+          GameFeedback(type: FeedbackType.validationError, message: balanceError),
+          ready);
+      return;
+    }
+
+    final newBet = BetEntry(
       id: _newId(),
       userId: ready.userId,
       session: event.session,
@@ -276,20 +295,19 @@ class UnifiedGameBloc extends Bloc<UnifiedGameEvent, UnifiedGameState> {
       marketId: ready.marketId,
     );
 
-    final updated = ready.copyWith(cart: [...ready.cart, bet]);
-    _lastReadyState = updated;
-    emit(updated);
+    emit(state.copyWith(
+        gameState: LocalState.success(
+            ready.copyWith(cart: [...ready.cart, newBet]))));
   }
 
-  // ── Bulk bets ───────────────────────────────────────────────────────────────
+  // ── Bulk bets ─────────────────────────────────────────────────────────────────
 
-  void _onAddBulk(
-      AddBulkBetsEvent event, Emitter<UnifiedGameState> emit) {
+  void _onAddBulk(AddBulkBetsEvent event, Emitter<UnifiedGameState> emit) {
     final ready = _ready;
     if (ready == null) return;
 
-    final newBets = <BetEntry>[];
-    final errors = <String>[];
+    final List<BetEntry> newBets = [];
+    final List<String> errors = [];
 
     for (final entry in event.entries.entries) {
       final value = entry.key.trim();
@@ -323,61 +341,104 @@ class UnifiedGameBloc extends Bloc<UnifiedGameEvent, UnifiedGameState> {
     }
 
     if (errors.isNotEmpty) {
-      emit(GameValidationErrorState(
-          '${errors.length} row(s) skipped:\n${errors.take(3).join('\n')}'));
+      // Emit the error feedback — followed by the current ready state (possibly
+      // with the successfully parsed bets already added below, or the original).
     }
 
     if (newBets.isNotEmpty) {
       final totalAdded = newBets.fold(0, (s, b) => s + b.points);
       if (ready.totalPoints + totalAdded > ready.settings.walletBalance) {
-        emit(const GameValidationErrorState('Total exceeds wallet balance'));
-        emit(ready);
+        _emitFeedback(
+          emit,
+          const GameFeedback(
+              type: FeedbackType.validationError,
+              message: 'Total exceeds wallet balance'),
+          ready,
+        );
         return;
       }
       final updated = ready.copyWith(cart: [...ready.cart, ...newBets]);
-      _lastReadyState = updated;
-      emit(updated);
+
+      if (errors.isNotEmpty) {
+        // Show errors but still commit the valid rows.
+        emit(state.copyWith(
+          gameState: LocalState.success(updated),
+          feedback: GameFeedback(
+            type: FeedbackType.validationError,
+            message:
+            '${errors.length} row(s) skipped:\n${errors.take(3).join('\n')}',
+          ),
+        ));
+        // Clear feedback so listener fires exactly once.
+        emit(state.copyWith(
+            gameState: LocalState.success(updated), feedback: null));
+      } else {
+        emit(state.copyWith(gameState: LocalState.success(updated)));
+      }
     } else if (errors.isEmpty) {
-      emit(const GameValidationErrorState('No points entered'));
-      emit(ready);
+      _emitFeedback(
+        emit,
+        const GameFeedback(
+            type: FeedbackType.validationError, message: 'No points entered'),
+        ready,
+      );
     } else {
-      // All rows had errors — restore ready so UI doesn't blank out.
-      emit(ready);
+      // Every row had an error — report and keep current state.
+      _emitFeedback(
+        emit,
+        GameFeedback(
+          type: FeedbackType.validationError,
+          message:
+          '${errors.length} row(s) skipped:\n${errors.take(3).join('\n')}',
+        ),
+        ready,
+      );
     }
   }
 
-  // ── Motor bets ──────────────────────────────────────────────────────────────
+  // ── Motor bets ────────────────────────────────────────────────────────────────
 
-  void _onAddMotor(
-      AddMotorBetsEvent event, Emitter<UnifiedGameState> emit) {
+  void _onAddMotor(AddMotorBetsEvent event, Emitter<UnifiedGameState> emit) {
     final ready = _ready;
     if (ready == null) return;
 
     final pointsError =
     _validatePoints(event.pointsPerCombo, ready.settings);
     if (pointsError != null) {
-      emit(GameValidationErrorState(pointsError));
-      emit(ready);
+      _emitFeedback(emit,
+          GameFeedback(type: FeedbackType.validationError, message: pointsError),
+          ready);
       return;
     }
 
-    final combos =
-    PannaValidator.expandMotorInput(event.rawInput, ready.config.pannaType);
+    final combos = PannaValidator.expandMotorInput(
+        event.rawInput, ready.config.pannaType);
 
     if (combos.isEmpty) {
-      emit(GameValidationErrorState(
+      _emitFeedback(
+        emit,
+        GameFeedback(
+          type: FeedbackType.validationError,
+          message:
           'No valid ${_pannaTypeName(ready.config.pannaType)} combos found. '
-              'Check your input and try again.'));
-      emit(ready);
+              'Check your input and try again.',
+        ),
+        ready,
+      );
       return;
     }
 
     final totalCost = combos.length * event.pointsPerCombo;
     if (ready.totalPoints + totalCost > ready.settings.walletBalance) {
-      emit(GameValidationErrorState(
-          'This motor costs ₹$totalCost but you only have '
-              '₹${ready.remainingBalance} remaining'));
-      emit(ready);
+      _emitFeedback(
+        emit,
+        GameFeedback(
+          type: FeedbackType.validationError,
+          message: 'This motor costs ₹$totalCost but you only have '
+              '₹${ready.remainingBalance} remaining',
+        ),
+        ready,
+      );
       return;
     }
 
@@ -395,32 +456,29 @@ class UnifiedGameBloc extends Bloc<UnifiedGameEvent, UnifiedGameState> {
     ))
         .toList();
 
-    final updated = ready.copyWith(cart: [...ready.cart, ...newBets]);
-    _lastReadyState = updated;
-    emit(updated);
+    emit(state.copyWith(
+        gameState: LocalState.success(
+            ready.copyWith(cart: [...ready.cart, ...newBets]))));
   }
 
-  // ── Remove ──────────────────────────────────────────────────────────────────
+  // ── Remove / Clear ────────────────────────────────────────────────────────────
 
-  void _onRemoveBet(
-      RemoveBetEvent event, Emitter<UnifiedGameState> emit) {
+  void _onRemoveBet(RemoveBetEvent event, Emitter<UnifiedGameState> emit) {
     final ready = _ready;
     if (ready == null) return;
-    final updated = ready.copyWith(
-        cart: ready.cart.where((b) => b.id != event.betId).toList());
-    _lastReadyState = updated;
-    emit(updated);
+    emit(state.copyWith(
+        gameState: LocalState.success(ready.copyWith(
+            cart: ready.cart.where((b) => b.id != event.betId).toList()))));
   }
 
   void _onClearCart(ClearCartEvent event, Emitter<UnifiedGameState> emit) {
     final ready = _ready;
     if (ready == null) return;
-    final updated = ready.copyWith(cart: const []);
-    _lastReadyState = updated;
-    emit(updated);
+    emit(state.copyWith(
+        gameState: LocalState.success(ready.copyWith(cart: const []))));
   }
 
-  // ── Submit ──────────────────────────────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────────
 
   Future<void> _onSubmit(
       SubmitBetsEvent event, Emitter<UnifiedGameState> emit) async {
@@ -428,16 +486,19 @@ class UnifiedGameBloc extends Bloc<UnifiedGameEvent, UnifiedGameState> {
     if (ready == null) return;
 
     if (ready.cart.isEmpty) {
-      emit(const GameValidationErrorState(
-          'Add at least one bet before submitting'));
-      emit(ready);
+      _emitFeedback(
+        emit,
+        const GameFeedback(
+            type: FeedbackType.validationError,
+            message: 'Add at least one bet before submitting'),
+        ready,
+      );
       return;
     }
 
-    // Show loading indicator inside the button.
-    final submittingState = ready.copyWith(isSubmitting: true);
-    _lastReadyState = submittingState;
-    emit(submittingState);
+    // Show the spinner inside the submit button.
+    emit(state.copyWith(
+        gameState: LocalState.success(ready.copyWith(isSubmitting: true))));
 
     try {
       final formattedGameMode =
@@ -455,52 +516,62 @@ class UnifiedGameBloc extends Bloc<UnifiedGameEvent, UnifiedGameState> {
       })
           .toList();
 
-     final result = await bettingUseCases.submitBetUseCase.call(betsList);
+      final result = await bettingUseCases.submitBetUseCase.call(betsList);
 
-     result.fold((success){
-       // ── Success path ──────────────────────────────────────────────────────
-       // 1. Build the cleared ready state FIRST and cache it.
-       final clearedState = ready.copyWith(cart: const [], isSubmitting: false);
-       _lastReadyState = clearedState;
+      result.fold(
+            (success) {
+          // Clear cart, stop spinner.
+          final cleared = ready.copyWith(cart: const [], isSubmitting: false);
 
-       // 2. Emit the transient success notification (caught by BlocListener).
-       emit(GameSubmitSuccessState(
-         message: '${ready.cart.length} bet(s) placed successfully!',
-         betsCount: ready.cart.length,
-       ));
+          // Emit success feedback, then settle on the cleared ready state.
+          emit(state.copyWith(
+            gameState: LocalState.success(cleared),
+            feedback: GameFeedback(
+              type: FeedbackType.submitSuccess,
+              message: '${ready.cart.length} bet(s) placed successfully!',
+              betsCount: ready.cart.length,
+            ),
+          ));
+          emit(state.copyWith(
+              gameState: LocalState.success(cleared), feedback: null));
 
-       // 3. Restore to cleared ready state.
-       emit(clearedState);
-
-       // 4. Refresh wallet in background — does NOT trigger GoRouter refresh
-       //    because routes.dart now only listens to auth-change events.
-       _authBloc.add(FetchProfileEvent());
-     }, (error){
-       // ── Failure path ──────────────────────────────────────────────────────
-       // 1. Build the recovered ready state and cache it.
-       final recoveredState = ready.copyWith(isSubmitting: false);
-       _lastReadyState = recoveredState;
-
-       // 2. Emit the transient failure notification (caught by BlocListener).
-       emit(GameSubmitFailureState(error.message.toString()));
-
-       // 3. Restore to the same ready state so the user can fix & retry.
-       emit(recoveredState);
-     });
-
-
+          // Refresh wallet balance in the background.
+          _authBloc.add(FetchProfileEvent());
+        },
+            (error) {
+          final recovered = ready.copyWith(isSubmitting: false);
+          emit(state.copyWith(
+            gameState: LocalState.success(recovered),
+            feedback: GameFeedback(
+              type: FeedbackType.submitFailure,
+              message: error.message.toString(),
+            ),
+          ));
+          emit(state.copyWith(
+              gameState: LocalState.success(recovered), feedback: null));
+        },
+      );
     } catch (e) {
-      // ── Failure path ──────────────────────────────────────────────────────
-      // 1. Build the recovered ready state and cache it.
-      final recoveredState = ready.copyWith(isSubmitting: false);
-      _lastReadyState = recoveredState;
-
-      // 2. Emit the transient failure notification (caught by BlocListener).
-      emit(GameSubmitFailureState(e.toString()));
-
-      // 3. Restore to the same ready state so the user can fix & retry.
-      emit(recoveredState);
+      final recovered = ready.copyWith(isSubmitting: false);
+      emit(state.copyWith(
+        gameState: LocalState.success(recovered),
+        feedback: GameFeedback(
+          type: FeedbackType.submitFailure,
+          message: e.toString(),
+        ),
+      ));
+      emit(state.copyWith(
+          gameState: LocalState.success(recovered), feedback: null));
     }
+  }
+
+  String? _validateBalance(int additionalPoints, GameReadyData ready) {
+    final newTotal = ready.totalPoints + additionalPoints;
+    if (newTotal > ready.settings.walletBalance) {
+      return 'Insufficient balance — need ₹$additionalPoints, '
+          'available ₹${ready.remainingBalance}';
+    }
+    return null;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

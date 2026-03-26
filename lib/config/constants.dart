@@ -1,15 +1,34 @@
 
 class AppUrl {
-  // static const String url = "http://10.0.10.151:7002"; // LOCAL Pushpendra
-  // static const String url = "http://183.83.55.92:5010"; // LOCAL Daksh
-  static const String url = "https://server.lbgroupgames.com"; // LOCAL Daksh
+  // static const String url = "http://10.0.10.151:7002"; // LOCAL
+  // static const String url = "http://183.83.55.92:5010"; // LOCAL
+  static const String url = "https://server.lbgroupgames.com"; // LOCAL
   // static const String url = 'http://192.168.0.21:2552';  // live Api v1
   static const String baseUrl = '$url/api/v1';
 }
 
 class AppLogos {
 
+// Images
   static const String appIcon = 'assets/images/app_icon.png';
+
+  // Icons
+  static const String calendar = 'assets/icons/calendar.svg';
+  static const String cart = 'assets/icons/cart.svg';
+  static const String deposit = 'assets/icons/deposit.svg';
+  static const String down = 'assets/icons/down.svg';
+  static const String up = 'assets/icons/up.svg';
+  static const String edit = 'assets/icons/edit.svg';
+  static const String home = 'assets/icons/home.svg';
+  static const String lock = 'assets/icons/lock.svg';
+  static const String microphone = 'assets/icons/microphone.svg';
+  static const String phone = 'assets/icons/phone.svg';
+  static const String profile = 'assets/icons/profile.svg';
+  static const String send = 'assets/icons/send.svg';
+  static const String transaction = 'assets/icons/transactions.svg';
+  static const String unlock = 'assets/icons/unlock.svg';
+  static const String wallet = 'assets/icons/wallet.svg';
+  static const String withdraw = 'assets/icons/withdraw.svg';
 
 }
 

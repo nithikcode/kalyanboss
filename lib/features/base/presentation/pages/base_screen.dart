@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:kalyanboss/config/constants.dart';
 import 'package:kalyanboss/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:kalyanboss/features/base/presentation/bloc/base_bloc.dart';
+import 'package:kalyanboss/features/game/presentation/screens/bet_history_screen.dart';
 import 'package:kalyanboss/features/game/presentation/screens/game_screen.dart';
+import 'package:kalyanboss/features/game/presentation/screens/transaction_history_screen.dart';
 
 
 class BaseScreen extends StatelessWidget {
@@ -10,22 +14,34 @@ class BaseScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // List of screens to navigate between
-    final List<Widget> screens = [
-      _buildHomeContent(context), // Your existing profile/wallet logic
-      const GameScreen(),         // The Market list screen we created
-    ];
-
     return BlocBuilder<BaseBloc, BaseState>(
       builder: (context, baseState) {
         return Scaffold(
-          body: screens[baseState.currentIndex],
+          // IndexedStack ensures initState() only runs ONCE per screen
+          body: IndexedStack(
+            index: baseState.currentIndex,
+            children: [
+              const TransactionHistoryScreen(),
+              const BetHistoryScreen(),
+              _buildHomeContent(context),
+              const GameScreen(),
+            ],
+          ),
           bottomNavigationBar: BottomNavigationBar(
+
+            selectedFontSize: 12,
+            selectedItemColor: Colors.black,
+            type: BottomNavigationBarType.fixed,
             currentIndex: baseState.currentIndex,
-            onTap: (index) => context.read<BaseBloc>().add(TabChangedEvent(index)),
-            items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
-              BottomNavigationBarItem(icon: Icon(Icons.games), label: "Markets"),
+            onTap: (index) {
+
+              context.read<BaseBloc>().add(TabChangedEvent(index));
+            },
+            items: [
+              BottomNavigationBarItem(icon: SvgPicture.asset(AppLogos.transaction,), label: "Transactions"),
+              BottomNavigationBarItem(icon: SvgPicture.asset(AppLogos.calendar), label: "Bet History"),
+              BottomNavigationBarItem(icon: SvgPicture.asset(AppLogos.profile), label: "Profile"),
+              BottomNavigationBarItem(icon: SvgPicture.asset(AppLogos.home), label: "Markets"),
             ],
           ),
         );

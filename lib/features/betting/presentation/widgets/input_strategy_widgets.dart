@@ -26,7 +26,7 @@ class _GridStyleInputState extends State<GridStyleInput> {
     super.dispose();
   }
 
-  void _submit(GameReadyState ready) {
+  void _submit(GameReadyData data) {
     final pts = int.tryParse(_pointsCtrl.text.trim()) ?? 0;
     if (_selected == null) {
       ScaffoldMessenger.of(context)
@@ -34,11 +34,11 @@ class _GridStyleInputState extends State<GridStyleInput> {
       return;
     }
     context.read<UnifiedGameBloc>().add(AddSingleBetEvent(
-          openValue: _selected!,
-          closeValue: '',
-          points: pts,
-          session: ready.currentSession,
-        ));
+      openValue: _selected!,
+      closeValue: '',
+      points: pts,
+      session: data.currentSession,
+    ));
     _pointsCtrl.clear();
     setState(() => _selected = null);
   }
@@ -46,8 +46,12 @@ class _GridStyleInputState extends State<GridStyleInput> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<UnifiedGameBloc, UnifiedGameState>(
+      buildWhen: (previous, current) =>
+      current.gameState != previous.gameState,
       builder: (ctx, state) {
-        if (state is! GameReadyState) return const SizedBox.shrink();
+        final data = state.gameState.dataOrNull;
+        if (data == null) return const SizedBox.shrink();
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -76,8 +80,7 @@ class _GridStyleInputState extends State<GridStyleInput> {
                       borderRadius: BorderRadius.circular(10),
                       border: selected
                           ? null
-                          : Border.all(
-                              color: Theme.of(context).dividerColor),
+                          : Border.all(color: Theme.of(context).dividerColor),
                     ),
                     alignment: Alignment.center,
                     child: Text(
@@ -97,7 +100,7 @@ class _GridStyleInputState extends State<GridStyleInput> {
             const SizedBox(height: 16),
             _PointsRow(
               controller: _pointsCtrl,
-              onAdd: () => _submit(state),
+              onAdd: () => _submit(data),
               selectedLabel: _selected != null ? 'Digit: $_selected' : null,
             ),
           ],
@@ -128,14 +131,14 @@ class _InputStyleInputState extends State<InputStyleInput> {
     super.dispose();
   }
 
-  void _submit(GameReadyState ready) {
+  void _submit(GameReadyData data) {
     final pts = int.tryParse(_pointsCtrl.text.trim()) ?? 0;
     context.read<UnifiedGameBloc>().add(AddSingleBetEvent(
-          openValue: _digitCtrl.text.trim(),
-          closeValue: '',
-          points: pts,
-          session: ready.currentSession,
-        ));
+      openValue: _digitCtrl.text.trim(),
+      closeValue: '',
+      points: pts,
+      session: data.currentSession,
+    ));
     _digitCtrl.clear();
     _pointsCtrl.clear();
   }
@@ -143,9 +146,13 @@ class _InputStyleInputState extends State<InputStyleInput> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<UnifiedGameBloc, UnifiedGameState>(
+      buildWhen: (previous, current) =>
+      current.gameState != previous.gameState,
       builder: (ctx, state) {
-        if (state is! GameReadyState) return const SizedBox.shrink();
-        final config = state.config;
+        final data = state.gameState.dataOrNull;
+        if (data == null) return const SizedBox.shrink();
+
+        final config = data.config;
         return Column(
           children: [
             _BetTextField(
@@ -157,7 +164,7 @@ class _InputStyleInputState extends State<InputStyleInput> {
             const SizedBox(height: 12),
             _PointsRow(
               controller: _pointsCtrl,
-              onAdd: () => _submit(state),
+              onAdd: () => _submit(data),
             ),
           ],
         );
@@ -177,28 +184,22 @@ class BulkStyleInput extends StatefulWidget {
 }
 
 class _BulkStyleInputState extends State<BulkStyleInput> {
-  // For digit/jodi bulk: rows are 0-9.
-  // For panna bulk: rows cycle through valid pannas page by page.
-  // We keep it simple with a Map<label, pointsCtrl>.
   late Map<String, TextEditingController> _rows;
   bool _rowsBuilt = false;
 
-  void _buildRows(GameReadyState state) {
+  void _buildRows(GameReadyData data) {
     if (_rowsBuilt) return;
     _rowsBuilt = true;
 
-    final config = state.config;
+    final config = data.config;
     List<String> keys;
 
     if (config.digitCount == 1) {
       keys = List.generate(10, (i) => i.toString());
     } else if (config.digitCount == 2) {
-      // Jodi: 00-99
       keys = List.generate(100, (i) => i.toString().padLeft(2, '0'));
     } else {
-      // Panna bulk: show all valid pannas for the type (can be large)
       final pannas = PannaValidator.allPannasForType(config.pannaType);
-      // Limit to first 120 for performance; user can search
       keys = pannas.take(120).toList();
     }
 
@@ -211,23 +212,27 @@ class _BulkStyleInputState extends State<BulkStyleInput> {
     super.dispose();
   }
 
-  void _submitAll(GameReadyState ready) {
+  void _submitAll(GameReadyData data) {
     final entries = <String, int>{};
     _rows.forEach((key, ctrl) {
       final v = int.tryParse(ctrl.text.trim()) ?? 0;
       if (v > 0) entries[key] = v;
     });
     context.read<UnifiedGameBloc>().add(
-        AddBulkBetsEvent(entries: entries, session: ready.currentSession));
+        AddBulkBetsEvent(entries: entries, session: data.currentSession));
     for (final c in _rows.values) c.clear();
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<UnifiedGameBloc, UnifiedGameState>(
+      buildWhen: (previous, current) =>
+      current.gameState != previous.gameState,
       builder: (ctx, state) {
-        if (state is! GameReadyState) return const SizedBox.shrink();
-        _buildRows(state);
+        final data = state.gameState.dataOrNull;
+        if (data == null) return const SizedBox.shrink();
+
+        _buildRows(data);
 
         return Column(
           children: [
@@ -266,7 +271,7 @@ class _BulkStyleInputState extends State<BulkStyleInput> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _submitAll(state),
+                onPressed: () => _submitAll(data),
                 icon: const Icon(Icons.playlist_add),
                 label: const Text('Add All to Cart'),
                 style: ElevatedButton.styleFrom(
@@ -308,13 +313,13 @@ class _MotorStyleInputState extends State<MotorStyleInput> {
     super.dispose();
   }
 
-  void _submit(GameReadyState ready) {
+  void _submit(GameReadyData data) {
     final pts = int.tryParse(_pointsCtrl.text.trim()) ?? 0;
     context.read<UnifiedGameBloc>().add(AddMotorBetsEvent(
-          rawInput: _pannaCtrl.text,
-          pointsPerCombo: pts,
-          session: ready.currentSession,
-        ));
+      rawInput: _pannaCtrl.text,
+      pointsPerCombo: pts,
+      session: data.currentSession,
+    ));
     _pannaCtrl.clear();
     _pointsCtrl.clear();
     setState(() => _preview = []);
@@ -323,9 +328,13 @@ class _MotorStyleInputState extends State<MotorStyleInput> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<UnifiedGameBloc, UnifiedGameState>(
+      buildWhen: (previous, current) =>
+      current.gameState != previous.gameState,
       builder: (ctx, state) {
-        if (state is! GameReadyState) return const SizedBox.shrink();
-        final config = state.config;
+        final data = state.gameState.dataOrNull;
+        if (data == null) return const SizedBox.shrink();
+
+        final config = data.config;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,11 +371,11 @@ class _MotorStyleInputState extends State<MotorStyleInput> {
                 children: _preview
                     .take(30)
                     .map((p) => Chip(
-                          label: Text(p),
-                          visualDensity: VisualDensity.compact,
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primaryContainer,
-                        ))
+                  label: Text(p),
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor:
+                  Theme.of(context).colorScheme.primaryContainer,
+                ))
                     .toList(),
               ),
               if (_preview.length > 30)
@@ -382,7 +391,7 @@ class _MotorStyleInputState extends State<MotorStyleInput> {
             const SizedBox(height: 12),
             _PointsRow(
               controller: _pointsCtrl,
-              onAdd: () => _submit(state),
+              onAdd: () => _submit(data),
               selectedLabel: _preview.isNotEmpty
                   ? 'Per combo — Total: ₹${(int.tryParse(_pointsCtrl.text.trim()) ?? 0) * _preview.length}'
                   : null,
@@ -417,14 +426,14 @@ class _SangamStyleInputState extends State<SangamStyleInput> {
     super.dispose();
   }
 
-  void _submit(GameReadyState ready) {
+  void _submit(GameReadyData data) {
     final pts = int.tryParse(_pointsCtrl.text.trim()) ?? 0;
     context.read<UnifiedGameBloc>().add(AddSingleBetEvent(
-          openValue: _openCtrl.text.trim(),
-          closeValue: _closeCtrl.text.trim(),
-          points: pts,
-          session: ready.currentSession,
-        ));
+      openValue: _openCtrl.text.trim(),
+      closeValue: _closeCtrl.text.trim(),
+      points: pts,
+      session: data.currentSession,
+    ));
     _openCtrl.clear();
     _closeCtrl.clear();
     _pointsCtrl.clear();
@@ -433,9 +442,13 @@ class _SangamStyleInputState extends State<SangamStyleInput> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<UnifiedGameBloc, UnifiedGameState>(
+      buildWhen: (previous, current) =>
+      current.gameState != previous.gameState,
       builder: (ctx, state) {
-        if (state is! GameReadyState) return const SizedBox.shrink();
-        final config = state.config;
+        final data = state.gameState.dataOrNull;
+        if (data == null) return const SizedBox.shrink();
+
+        final config = data.config;
         final isFullSangam = config.hasDualPanna;
 
         return Column(
@@ -464,7 +477,7 @@ class _SangamStyleInputState extends State<SangamStyleInput> {
             const SizedBox(height: 12),
             _PointsRow(
               controller: _pointsCtrl,
-              onAdd: () => _submit(state),
+              onAdd: () => _submit(data),
             ),
           ],
         );

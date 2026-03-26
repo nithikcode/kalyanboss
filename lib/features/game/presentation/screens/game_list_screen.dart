@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:kalyanboss/config/constants.dart';
 import 'package:kalyanboss/config/routes/route_names.dart';
 import 'package:kalyanboss/config/theme/theme.dart';
 import 'package:kalyanboss/features/auth/presentation/bloc/auth_bloc.dart';
@@ -312,9 +314,8 @@ class _GameListState extends State<GameList>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.account_balance_wallet,
-              color: colors.onPrimary, size: 16),
-          const SizedBox(width: 6),
+          SvgPicture.asset(AppLogos.wallet, colorFilter: ColorFilter.mode(colors.onPrimary, BlendMode.srcIn),),
+           SizedBox(width: 6),
           Text(
             '₹$walletBalance', // Updated line
             style: theme.textTheme.bodySmall?.copyWith(
@@ -390,7 +391,7 @@ class _GameListState extends State<GameList>
       RouteNames.unifiedGameScreen,
       extra: {
         'gameMode': game,
-        'marketId': widget.market.id,
+        'market': widget.market,
         'userId': SessionManager.instance.getUserId,
       },
     );

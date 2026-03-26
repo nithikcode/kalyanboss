@@ -11,11 +11,13 @@ class BetCartWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<UnifiedGameBloc, UnifiedGameState>(
-      // Only rebuild the cart for stable states — never for transient ones.
-      buildWhen: (_, current) =>
-      current is GameReadyState || current is GameLoadingState,
+      // Only rebuild for gameState changes — never for feedback-only updates.
+      buildWhen: (previous, current) =>
+      current.gameState != previous.gameState,
       builder: (ctx, state) {
-        if (state is! GameReadyState || state.cart.isEmpty) {
+        final data = state.gameState.dataOrNull;
+
+        if (data == null || data.cart.isEmpty) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(
@@ -31,31 +33,47 @@ class BetCartWidget extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SummaryBar(state: state),
+            // Cart header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Cart',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (data == null || data.cart.isEmpty)
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: TextButton.icon(
+                      onPressed: () =>
+                          context.read<UnifiedGameBloc>().add(const ClearCartEvent()),
+                      icon: const Icon(Icons.delete_sweep, color: Colors.red),
+                      label: const Text('Clear All',
+                          style: TextStyle(color: Colors.red)),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 8),
+            _SummaryBar(data: data),
+            const SizedBox(height: 8),
+
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: state.cart.length,
+              itemCount: data.cart.length,
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (_, i) => _CartTile(
-                entry: state.cart[i],
+                entry: data.cart[i],
                 onRemove: () => ctx
                     .read<UnifiedGameBloc>()
-                    .add(RemoveBetEvent(state.cart[i].id)),
+                    .add(RemoveBetEvent(data.cart[i].id)),
               ),
             ),
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () =>
-                    ctx.read<UnifiedGameBloc>().add(const ClearCartEvent()),
-                icon: const Icon(Icons.delete_sweep, color: Colors.red),
-                label: const Text('Clear All',
-                    style: TextStyle(color: Colors.red)),
-              ),
-            ),
+
           ],
         );
       },
@@ -64,13 +82,13 @@ class BetCartWidget extends StatelessWidget {
 }
 
 class _SummaryBar extends StatelessWidget {
-  final GameReadyState state;
+  final GameReadyData data;
 
-  const _SummaryBar({required this.state});
+  const _SummaryBar({required this.data});
 
   @override
   Widget build(BuildContext context) {
-    final isOverBalance = state.remainingBalance < 0;
+    final isOverBalance = data.remainingBalance < 0;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -90,18 +108,18 @@ class _SummaryBar extends StatelessWidget {
         children: [
           _InfoChip(
             label: 'Bets',
-            value: '${state.cart.length}',
+            value: '${data.cart.length}',
             icon: Icons.receipt_long,
           ),
           _InfoChip(
             label: 'Total',
-            value: '₹${state.totalPoints}',
+            value: '₹${data.totalPoints}',
             icon: Icons.currency_rupee,
             color: Colors.orange,
           ),
           _InfoChip(
             label: 'Balance',
-            value: '₹${state.remainingBalance}',
+            value: '₹${data.remainingBalance}',
             icon: Icons.account_balance_wallet,
             color: isOverBalance ? Colors.red : Colors.green,
           ),
@@ -136,10 +154,7 @@ class _InfoChip extends StatelessWidget {
                 size: 14,
                 color: color ?? Theme.of(context).colorScheme.primary),
             const SizedBox(width: 4),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
+            Text(label, style: Theme.of(context).textTheme.labelSmall),
           ],
         ),
         const SizedBox(height: 2),

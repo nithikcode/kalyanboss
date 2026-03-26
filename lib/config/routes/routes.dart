@@ -11,9 +11,15 @@ import 'package:kalyanboss/features/base/presentation/bloc/base_bloc.dart';
 import 'package:kalyanboss/features/base/presentation/pages/base_screen.dart';
 import 'package:kalyanboss/features/betting/presentation/bloc/unified_game_bloc.dart';
 import 'package:kalyanboss/features/betting/presentation/screens/universal_bet_screen.dart';
+import 'package:kalyanboss/features/gali_desawar/presentation/bloc/gali_desawar_game_bloc.dart';
+import 'package:kalyanboss/features/gali_desawar/presentation/pages/gali_market_selected_screen.dart';
+import 'package:kalyanboss/features/game/domain/entity/market_entity.dart';
 import 'package:kalyanboss/features/game/presentation/bloc/game_bloc.dart';
-import 'package:kalyanboss/features/game/presentation/screens/chart.dart';
-import 'package:kalyanboss/features/game/presentation/screens/game_list.dart';
+import 'package:kalyanboss/features/game/presentation/screens/bet_history_screen.dart';
+import 'package:kalyanboss/features/game/presentation/screens/chart_screen.dart';
+import 'package:kalyanboss/features/game/presentation/screens/gali_disawar.dart';
+import 'package:kalyanboss/features/game/presentation/screens/gali_disawar_bet_history_screen.dart';
+import 'package:kalyanboss/features/game/presentation/screens/game_list_screen.dart';
 import 'package:kalyanboss/features/game/presentation/screens/game_screen.dart';
 
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
@@ -51,7 +57,11 @@ class AppRouter {
     navigatorKey: navigatorKey,
     initialLocation: RouteNames.splash,
     debugLogDiagnostics: kDebugMode,
-    refreshListenable: GoRouterRefreshStream(sl<AuthBloc>().stream),
+    refreshListenable: GoRouterRefreshStream(
+      sl<AuthBloc>().stream.where(
+            (state) => state.isAuthenticated != sl<AuthBloc>().state.isAuthenticated,
+      ),
+    ),
     routes: [
       GoRoute(
         path: RouteNames.splash,
@@ -123,13 +133,82 @@ class AppRouter {
         },
       ),
       GoRoute(
+        path: RouteNames.betHistoryScreen,
+        name: RouteNames.betHistoryScreen,
+        pageBuilder: (context, state) {
+          // 2. Wrap the screen with BlocProvider using Service Locator (sl)
+          return _withTransition(
+            state,
+            BlocProvider<GameBloc>(
+              // sl<GameBloc>() automatically handles UseCases & SessionManager injection
+              create: (context) => sl<GameBloc>(),
+              child: BetHistoryScreen(),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.galiDisawarScreen,
+        name: RouteNames.galiDisawarScreen,
+        pageBuilder: (context, state) {
+          // 2. Wrap the screen with BlocProvider using Service Locator (sl)
+          return _withTransition(
+            state,
+            BlocProvider<GameBloc>(
+              // sl<GameBloc>() automatically handles UseCases & SessionManager injection
+              create: (context) => sl<GameBloc>(),
+              child: GaliDesawarScreen(),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.galiDisawarHistoryScreen,
+        name: RouteNames.galiDisawarHistoryScreen,
+        pageBuilder: (context, state) {
+          // 2. Wrap the screen with BlocProvider using Service Locator (sl)
+          return _withTransition(
+            state,
+            BlocProvider<GameBloc>(
+              // sl<GameBloc>() automatically handles UseCases & SessionManager injection
+              create: (context) => sl<GameBloc>(),
+              child: GaliDisawarBetHistoryScreen(),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.galiDisawarMarketScreen,
+        name: RouteNames.galiDisawarMarketScreen,
+        // ✅ Guard: if extras are lost (GoRouter refresh dropped them), go back
+        redirect: (context, state) {
+          final args = state.extra as Map<String, dynamic>?;
+          if (args == null || args['market'] == null) {
+            return RouteNames.galiDisawarScreen; // or RouteNames.home
+          }
+          return null;
+        },
+        pageBuilder: (context, state) {
+          final args = state.extra as Map<String, dynamic>;
+          final data = args['market'] as MarketEntity; // safe — redirect guards this
+
+          return _withTransition(
+            state,
+            BlocProvider<GaliDesawarGameBloc>(
+              create: (context) => sl<GaliDesawarGameBloc>(),
+              child: GaliMarketSelectedScreen(market: data),
+            ),
+          );
+        },
+      ),
+      GoRoute(
         path: RouteNames.unifiedGameScreen,
         name: RouteNames.unifiedGameScreen,
         pageBuilder: (context, state) {
           // 1. Extract arguments safely from state.extra
           final args = state.extra as Map<String, dynamic>? ?? {};
 
-          final betArgs = BetScreenArgs(gameMode: args['gameMode'], marketId: args['marketId'], userId: args['userId']);
+          final betArgs = BetScreenArgs(gameMode: args['gameMode'], market: args['market'], userId: args['userId']);
           // 2. Wrap the screen with BlocProvider using Service Locator (sl)
           return _withTransition(
             state,

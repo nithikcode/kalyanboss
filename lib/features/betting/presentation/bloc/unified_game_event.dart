@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:kalyanboss/features/betting/domain/entity/betting_entity.dart';
 import 'package:kalyanboss/features/game/domain/entity/game_mode_entity.dart';
+import 'package:kalyanboss/features/game/domain/entity/market_entity.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Base
@@ -19,17 +20,17 @@ abstract class UnifiedGameEvent extends Equatable {
 /// Called when the screen opens. Loads settings and primes the BLoC.
 class InitGameEvent extends UnifiedGameEvent {
   final GameModeEntity gameMode;
-  final String marketId;
+  final MarketEntity market;
   final String userId;
 
   const InitGameEvent({
     required this.gameMode,
-    required this.marketId,
+    required this.market,
     required this.userId,
   });
 
   @override
-  List<Object?> get props => [gameMode, marketId, userId];
+  List<Object?> get props => [gameMode, market, userId];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

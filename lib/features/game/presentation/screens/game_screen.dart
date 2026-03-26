@@ -42,38 +42,75 @@ class _GameScreenState extends State<GameScreen> {
           ),
         ],
       ),
-      body: BlocBuilder<GameBloc, GameState>(
-        builder: (context, state) {
+      body: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  context.pushNamed(RouteNames.galiDisawarScreen);
+                },
+                child: Container(
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black),
+                    borderRadius: BorderRadius.circular(25),
 
-
-
-          // .when ensures all ApiStates are handled
-          return state.marketResponseEntity?.when(
-            initial: () => const Center(child: Text("Initializing...")),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            refreshing: (data) => _buildMarketList(data),
-            success: (entity) => RefreshIndicator(
-              onRefresh: () async => _fetchMarkets(),
-              child: _buildMarketList(entity),
-            ),
-            error: (message, _) => Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 40),
-                  const SizedBox(height: 8),
-                  Text("Error: $message", style: const TextStyle(color: Colors.red)),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _fetchMarkets,
-                    child: const Text("Retry"),
                   ),
-                ],
+                  child: Text("Gali Disawar"),
+                ),
               ),
+
+              GestureDetector(
+                onTap: () {
+                  context.pushNamed(RouteNames.galiDisawarScreen);
+                },
+                child: Container(
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black),
+                    borderRadius: BorderRadius.circular(25),
+
+                  ),
+                  child: Text("Starline"),
+                ),
+              ),
+            ],
+          ),
+          Expanded(
+            child: BlocBuilder<GameBloc, GameState>(
+              builder: (context, state) {
+                // .when ensures all ApiStates are handled
+                return state.marketResponseEntity?.when(
+                  initial: () => const Center(child: Text("Initializing...")),
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  refreshing: (data) => _buildMarketList(data),
+                  success: (entity) => RefreshIndicator(
+                    onRefresh: () async => _fetchMarkets(),
+                    child: _buildMarketList(entity),
+                  ),
+                  error: (message, _) => Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red, size: 40),
+                        const SizedBox(height: 8),
+                        Text("Error: $message", style: const TextStyle(color: Colors.red)),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _fetchMarkets,
+                          child: const Text("Retry"),
+                        ),
+                      ],
+                    ),
+                  ),
+                ) ??
+                    const SizedBox.shrink();
+              },
             ),
-          ) ??
-              const SizedBox.shrink();
-        },
+          ),
+        ],
       ),
     );
   }
